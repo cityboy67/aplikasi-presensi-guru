@@ -11,8 +11,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Aplikasi Presensi Guru',
+      title: 'Presensi Guru Al Aqsha',
       debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        fontFamily: 'Poppins',
+        primarySwatch: Colors.teal,
+        useMaterial3: false,
+      ),
       home: const SplashScreen(),
     );
   }
