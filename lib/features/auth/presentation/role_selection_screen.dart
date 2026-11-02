@@ -86,6 +86,7 @@ class RoleSelectionScreen extends StatelessWidget {
                   _buildRoleCard(
                     context: context,
                     title: 'Admin',
+                    imagePath: 'assets/images/admin.jpg',
                     icon: Icons.admin_panel_settings_rounded,
                     avatarBgColor: const Color(0xFF1E824C),
                     onTap: () {
@@ -104,6 +105,7 @@ class RoleSelectionScreen extends StatelessWidget {
                   _buildRoleCard(
                     context: context,
                     title: 'Guru',
+                    imagePath: 'assets/images/guru.png',
                     icon: Icons.person_rounded,
                     avatarBgColor: const Color(0xFF1B6A42),
                     onTap: () {
@@ -133,6 +135,7 @@ class RoleSelectionScreen extends StatelessWidget {
   Widget _buildRoleCard({
     required BuildContext context,
     required String title,
+    required String imagePath,
     required IconData icon,
     required Color avatarBgColor,
     required VoidCallback onTap,
@@ -157,15 +160,25 @@ class RoleSelectionScreen extends StatelessWidget {
           ),
           child: Row(
             children: [
+              // Avatar dengan foto
               Container(
-                width: 48,
-                height: 48,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
                   color: avatarBgColor,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: Colors.white, size: 28),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    imagePath,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        Icon(icon, color: Colors.white, size: 28),
+                  ),
+                ),
               ),
+              const SizedBox(width: 4),
               Expanded(
                 child: Text(
                   title,
