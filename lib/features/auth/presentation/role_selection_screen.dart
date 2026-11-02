@@ -27,17 +27,13 @@ class RoleSelectionScreen extends StatelessWidget {
                     'assets/images/bg_alaqsha.jpg',
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: const Color(0xFF1B4D4F),
-                      );
+                      return Container(color: const Color(0xFF1B4D4F));
                     },
                   ),
                 ),
                 // Overlay Gelap Tipis agar Teks "AL AQSHA" Tetap Jelas
                 Positioned.fill(
-                  child: Container(
-                    color: Colors.black.withOpacity(0.25),
-                  ),
+                  child: Container(color: Colors.black.withValues(alpha: 0.25)),
                 ),
                 // Teks "AL AQSHA" di Tengah Header
                 const Center(
@@ -59,12 +55,13 @@ class RoleSelectionScreen extends StatelessWidget {
           Positioned.fill(
             top: screenHeight * 0.28,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 28.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 28.0,
+              ),
               decoration: const BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(32),
-                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black12,
@@ -167,11 +164,7 @@ class RoleSelectionScreen extends StatelessWidget {
                   color: avatarBgColor,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  icon,
-                  color: Colors.white,
-                  size: 28,
-                ),
+                child: Icon(icon, color: Colors.white, size: 28),
               ),
               Expanded(
                 child: Text(
@@ -254,11 +247,7 @@ class RoleSelectionScreen extends StatelessWidget {
             imagePath,
             fit: BoxFit.contain,
             errorBuilder: (context, error, stackTrace) {
-              return Icon(
-                fallbackIcon,
-                color: fallbackColor,
-                size: 22,
-              );
+              return Icon(fallbackIcon, color: fallbackColor, size: 22);
             },
           ),
         ),
