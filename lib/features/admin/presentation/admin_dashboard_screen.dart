@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'detail_guru_screen.dart';
 import 'detail_presensi_admin_screen.dart';
 import 'rekap_presensi_screen.dart';
 import 'tambah_guru_screen.dart';
@@ -428,7 +429,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         ),
                       ),
                       InkWell(
-                        onTap: () => setState(() => _selectedNav = 1),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => DetailGuruScreen(guru: data),
+                            ),
+                          );
+                        },
                         child: Container(
                           height: 24,
                           padding: const EdgeInsets.symmetric(horizontal: 8),
