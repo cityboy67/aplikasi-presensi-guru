@@ -48,7 +48,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                   padding: const EdgeInsets.only(right: 16.0),
                   child: Row(
                     children: [
-                      _buildAppBarLogo('assets/images/logo_sekolah.png', Icons.school, Colors.red.shade700),
+                      _buildAppBarLogo('assets/images/logo_upi.png', Icons.school, Colors.red.shade700),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 6.0),
                         child: Text(
@@ -134,7 +134,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                 children: [
                   Positioned.fill(
                     child: Image.asset(
-                      'assets/images/bg_alaqsha.png',
+                      'assets/images/bg_alaqsha.jpg',
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(color: const Color(0xFF1B4D4F));
@@ -869,7 +869,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
                 child: Image.asset(
-                  'assets/images/guru_photo.png',
+                  'assets/images/guru_photo1.png',
                   height: 220,
                   width: double.infinity,
                   fit: BoxFit.cover,

@@ -21,7 +21,6 @@ class RoleSelectionScreen extends StatelessWidget {
             height: screenHeight * 0.35,
             child: Stack(
               children: [
-                // Gambar Gedung / Background Custom
                 Positioned.fill(
                   child: Image.asset(
                     'assets/images/bg_alaqsha.jpg',
@@ -31,11 +30,9 @@ class RoleSelectionScreen extends StatelessWidget {
                     },
                   ),
                 ),
-                // Overlay Gelap Tipis agar Teks "AL AQSHA" Tetap Jelas
                 Positioned.fill(
                   child: Container(color: Colors.black.withValues(alpha: 0.25)),
                 ),
-                // Teks "AL AQSHA" di Tengah Header
                 const Center(
                   child: Text(
                     'AL AQSHA',
@@ -70,60 +67,65 @@ class RoleSelectionScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Column(
-                children: [
-                  const Text(
-                    'Masuk Sebagai',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Tombol Role Admin
-                  _buildRoleCard(
-                    context: context,
-                    title: 'Admin',
-                    imagePath: 'assets/images/admin.jpg',
-                    icon: Icons.admin_panel_settings_rounded,
-                    avatarBgColor: const Color(0xFF1E824C),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const LoginAdminScreen(),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 650),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Masuk Sebagai',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
                         ),
-                      );
-                    },
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Tombol Role Admin
+                      _buildRoleCard(
+                        context: context,
+                        title: 'Admin',
+                        imagePath: 'assets/images/admin.jpg',
+                        icon: Icons.admin_panel_settings_rounded,
+                        avatarBgColor: const Color(0xFF1E824C),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const LoginAdminScreen(),
+                            ),
+                          );
+                        },
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      // Tombol Role Guru
+                      _buildRoleCard(
+                        context: context,
+                        title: 'Guru',
+                        imagePath: 'assets/images/guru.png',
+                        icon: Icons.person_rounded,
+                        avatarBgColor: const Color(0xFF1B6A42),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const LoginGuruScreen(),
+                            ),
+                          );
+                        },
+                      ),
+
+                      const Spacer(),
+
+                      // Section Logo Kolaborasi (Kiri x Kanan)
+                      _buildCollaborationSection(),
+                      const SizedBox(height: 8),
+                    ],
                   ),
-
-                  const SizedBox(height: 18),
-
-                  // Tombol Role Guru
-                  _buildRoleCard(
-                    context: context,
-                    title: 'Guru',
-                    imagePath: 'assets/images/guru.png',
-                    icon: Icons.person_rounded,
-                    avatarBgColor: const Color(0xFF1B6A42),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const LoginGuruScreen(),
-                        ),
-                      );
-                    },
-                  ),
-
-                  const Spacer(),
-
-                  // Section Logo Kolaborasi (Kiri x Kanan)
-                  _buildCollaborationSection(),
-                  const SizedBox(height: 8),
-                ],
+                ),
               ),
             ),
           ),
@@ -160,7 +162,6 @@ class RoleSelectionScreen extends StatelessWidget {
           ),
           child: Row(
             children: [
-              // Avatar dengan foto
               Container(
                 width: 52,
                 height: 52,
@@ -210,7 +211,6 @@ class RoleSelectionScreen extends StatelessWidget {
     );
   }
 
-  // Widget Logo Kolaborasi
   Widget _buildCollaborationSection() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,

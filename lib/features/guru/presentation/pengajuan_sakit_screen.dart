@@ -85,7 +85,7 @@ class _PengajuanSakitScreenState extends State<PengajuanSakitScreen> {
             padding: const EdgeInsets.only(right: 16.0),
             child: Row(
               children: [
-                _buildAppBarLogo('assets/images/logo_sekolah.png', Icons.school, Colors.red.shade700),
+                _buildAppBarLogo('assets/images/logo_upi.png', Icons.school, Colors.red.shade700),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 6.0),
                   child: Text(
