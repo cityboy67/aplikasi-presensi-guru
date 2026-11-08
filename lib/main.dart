@@ -8,7 +8,7 @@ Future<void> main() async {
 
   // Inisialisasi Supabase
   await Supabase.initialize(
-    url: 'https://llqkmwaimudwkspypbfj.supabase.co/rest/v1/',
+    url: 'https://llqkmwaimudwkspypbfj.supabase.co',
     publishableKey: 'sb_publishable_2VIE0KA7VfMqJFjZOyUnPw_4R8or2hu',
   );
 
