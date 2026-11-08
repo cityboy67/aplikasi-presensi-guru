@@ -8,8 +8,8 @@ Future<void> main() async {
 
   // Inisialisasi Supabase
   await Supabase.initialize(
-    url: 'https://pjugprryghwdhfiwhdin.supabase.co',
-    publishableKey: 'sb_publishable_tHTfyOuuJixzvjFZ9MUOsQ_KbJ9bYs1',
+    url: 'https://llqkmwaimudwkspypbfj.supabase.co/rest/v1/',
+    publishableKey: 'sb_publishable_2VIE0KA7VfMqJFjZOyUnPw_4R8or2hu',
   );
 
   runApp(const MyApp());
