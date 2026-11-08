@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../admin/presentation/admin_dashboard_screen.dart';
+import '../../../main.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginAdminScreen extends StatefulWidget {
   const LoginAdminScreen({super.key});
@@ -17,12 +19,9 @@ class _LoginAdminScreenState extends State<LoginAdminScreen> {
   bool _isLoading = false;
   String _errorMessage = '';
 
-  void _handleLogin() async {
-    setState(() {
-      _errorMessage = '';
-    });
-
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+  Future<void> _handleLogin() async {
+    if (_emailController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
       setState(() {
         _errorMessage = 'Email dan password tidak boleh kosong';
       });
@@ -30,24 +29,73 @@ class _LoginAdminScreenState extends State<LoginAdminScreen> {
     }
 
     setState(() {
+      _errorMessage = '';
       _isLoading = true;
     });
 
-    // Mock Authentication delay
-    await Future.delayed(const Duration(milliseconds: 1500));
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+    try {
+      // 1. Login menggunakan Supabase Auth
+      final response = await supabase.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
       );
+
+      final user = response.user;
+
+      if (user == null) {
+        throw Exception('Autentikasi gagal.');
+      }
+
+      // 2. Periksa apakah akun terdaftar sebagai Admin
+      final admin = await supabase
+          .from('admin')
+          .select('admin_id, nama, email')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (admin == null) {
+        await supabase.auth.signOut();
+        throw Exception('Akun ini tidak terdaftar sebagai Admin.');
+      }
+
+      if (!mounted) return;
+
+      // 3. Masuk ke Dashboard Admin
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const AdminDashboardScreen(),
+        ),
+      );
+    } on AuthException catch (e) {
+      setState(() {
+        _errorMessage = 'Login gagal: ${e.message}';
+      });
+    } on PostgrestException catch (e) {
+      await supabase.auth.signOut();
+      setState(() {
+        _errorMessage = 'Gagal memeriksa akun Admin: ${e.message}';
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   Widget build(BuildContext context) {
     // Menghitung 84% dari lebar layar
     final double screenWidth = MediaQuery.of(context).size.width;
