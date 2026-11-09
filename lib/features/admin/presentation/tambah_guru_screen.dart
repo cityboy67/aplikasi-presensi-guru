@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
 
 class TambahGuruScreen extends StatefulWidget {
   const TambahGuruScreen({Key? key}) : super(key: key);
@@ -10,18 +12,60 @@ class TambahGuruScreen extends StatefulWidget {
 class _TambahGuruScreenState extends State<TambahGuruScreen> {
   // Controller untuk form
   final _namaController = TextEditingController();
-  final _nipController = TextEditingController();
+  final _niyController = TextEditingController();
   final _emailController = TextEditingController();
   final _waController = TextEditingController();
 
+  // Variable untuk menyimpan foto guru
+  Uint8List? _fotoGuruBytes;
+  String? _fotoGuruName;
+
+  final ImagePicker _imagePicker = ImagePicker();
+
+  //Fungsi untuk memilih foto dari galeri
+  Future<void> _pilihFoto() async {
+    try {
+      final XFile? foto = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (foto == null) return;
+
+      final bytes = await foto.readAsBytes();
+
+      // Validasi ukuran maksimal 2 MB.
+      if (bytes.length > 2 * 1024 * 1024) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ukuran foto maksimal 2 MB.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        _fotoGuruBytes = bytes;
+        _fotoGuruName = foto.name;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memilih foto: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+
   // Dropdown value
-  String? _selectedMapel;
-  final List<String> _mapelList = [
-    'Matematika Terapan',
-    'Teknik Jaringan',
-    'Bahasa Inggris',
-    'Pendidikan Agama',
-  ];
+  final String _guruJenis = 'Wali Kelas';
 
   bool _isLoading = false;
 
@@ -197,21 +241,36 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0F2F5),
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF00D83D), width: 2),
+                  border: Border.all(
+                    color: const Color(0xFF00D83D),
+                    width: 2,
+                  ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(
-                      Icons.person_outline,
-                      color: Color(0xFF6D5CE7),
-                      size: 28,
-                    ),
-                    Text(
-                      'Foto Guru',
-                      style: TextStyle(fontSize: 8, color: Color(0xFF6D5CE7)),
-                    ),
-                  ],
+                child: ClipOval(
+                  child: _fotoGuruBytes != null
+                      ? Image.memory(
+                        _fotoGuruBytes!,
+                        width: 70,
+                        height: 70,
+                        fit: BoxFit.cover,
+                      )
+                      : const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.person_outline,
+                              color: Color(0xFF6D5CE7),
+                              size: 28,
+                            ),
+                            Text(
+                              'Foto Guru',
+                              style: TextStyle(
+                                fontSize: 8,
+                                color: Color(0xFF6D5CE7),
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
               ),
               Positioned(
@@ -234,7 +293,7 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Maks. 2MB format JPG/PNG. Gunakan latar belakang netral Merah (Tahun ganjil) atau Biru (Tahun genap).',
+            'Maks. 2MB format JPG/JPEG/PNG. Gunakan latar belakang netral Merah (Tahun ganjil) atau Biru (Tahun genap).',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'Poppins',
@@ -244,7 +303,7 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
           ),
           const SizedBox(height: 12),
           ElevatedButton.icon(
-            onPressed: () {}, // Action to open file picker
+            onPressed: _pilihFoto, // Action to open file picker
             icon: const Icon(Icons.upload_file, size: 14, color: Colors.white),
             label: const Text(
               'Pilih File Foto',
@@ -285,13 +344,13 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
           ),
           const SizedBox(height: 12),
           _buildTextField(
-            label: 'NIP',
-            hint: 'Masukkan 18 Digit NIP atau NUPTK',
+            label: 'NIY',
+            hint: 'Masukkan 7 DIgit NIY',
             icon: Icons.badge_outlined,
-            controller: _nipController,
+            controller: _niyController,
             keyboardType: TextInputType.number,
-            maxLength: 18,
-            rightLabel: '18 Digit Terverifikasi',
+            maxLength: 7,
+            rightLabel: '7 Digit Terverifikasi',
           ),
         ],
       ),
@@ -335,6 +394,7 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
     );
   }
 
+  
   // --- 5. CARD AKADEMIK ---
   Widget _buildAkademikCard() {
     return _buildCardBase(
@@ -343,14 +403,14 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
         children: [
           _buildSectionHeader('03', 'Akademik', null),
           const SizedBox(height: 16),
-          // Dropdown Mata Pelajaran
+
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: const [
                   Text(
-                    'Mata Pelajaran Utama',
+                    'Jenis Guru',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 11,
@@ -369,57 +429,32 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
                 ],
               ),
               const SizedBox(height: 6),
+
               Container(
                 height: 42,
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border.all(color: const Color(0xFFE1E5E9)),
+                  border: Border.all(
+                    color: const Color(0xFFE1E5E9),
+                  ),
                   borderRadius: BorderRadius.circular(5),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(
-                  children: [
-                    const Icon(
-                      Icons.menu_book_outlined,
+                  children: const [
+                    Icon(
+                      Icons.school_outlined,
                       size: 16,
                       color: Color(0xFF858585),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     Expanded(
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedMapel,
-                          isExpanded: true,
-                          hint: const Text(
-                            'Contoh: Matematika Terapan',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 12,
-                              color: Color(0xFFB8BEC6),
-                            ),
-                          ),
-                          icon: const Icon(
-                            Icons.keyboard_arrow_down,
-                            color: Color(0xFF858585),
-                          ),
-                          items: _mapelList.map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(
-                                value,
-                                style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 12,
-                                  color: Color(0xFF252525),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (newValue) {
-                            setState(() {
-                              _selectedMapel = newValue;
-                            });
-                          },
+                      child: Text(
+                        'Wali Kelas',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          color: Color(0xFF252525),
                         ),
                       ),
                     ),
@@ -432,6 +467,7 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
       ),
     );
   }
+
 
   // --- REUSABLE WIDGETS ---
 
