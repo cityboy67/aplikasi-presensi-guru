@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../guru/presentation/guru_dashboard_screen.dart';
 
 class LoginGuruScreen extends StatefulWidget {
@@ -15,6 +16,7 @@ class _LoginGuruScreenState extends State<LoginGuruScreen> {
 
   bool _rememberMe = false;
   bool _isPasswordObscured = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -23,13 +25,68 @@ class _LoginGuruScreenState extends State<LoginGuruScreen> {
     super.dispose();
   }
 
-  void _handleSignIn() {
-    // Validasi form sebelum mengizinkan masuk
-    if (_formKey.currentState!.validate()) {
+  Future<void> _handleSignIn() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    final supabase = Supabase.instance.client;
+
+    try {
+      final identifier = _emailController.text.trim();
+      final password = _passwordController.text;
+
+      // Memanggil Edge Function untuk login menggunakan email atau NIY.
+      final response = await supabase.functions.invoke(
+        'login-guru',
+        body: {
+          'identifier': identifier,
+          'password': password,
+        },
+      );
+
+      if (response.status != 200 || response.data == null) {
+        throw Exception('Login gagal. Periksa email/NIY dan password.');
+      }
+
+      final responseData = response.data as Map<String, dynamic>;
+      final refreshToken = responseData['refresh_token'] as String?;
+
+      if (refreshToken == null || refreshToken.isEmpty) {
+        throw Exception('Token login tidak ditemukan.');
+      }
+
+      // Menyimpan sesi login ke Supabase Auth.
+      await supabase.auth.setSession(refreshToken);
+
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        throw Exception('Sesi login tidak ditemukan.');
+      }
+
+      // Memastikan akun benar-benar terdaftar sebagai guru.
+      final guru = await supabase
+          .from('guru')
+          .select('guru_id, nama, email, niy, status')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (guru == null) {
+        await supabase.auth.signOut();
+        throw Exception('Akun ini tidak terdaftar sebagai guru.');
+      }
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Login Berhasil! Selamat Datang.'),
-          backgroundColor: Color(0xFF194432),
+        SnackBar(
+          content: Text('Selamat datang, ${guru['nama']}!'),
+          backgroundColor: const Color(0xFF194432),
         ),
       );
 
@@ -39,13 +96,21 @@ class _LoginGuruScreenState extends State<LoginGuruScreen> {
           builder: (context) => const GuruDashboardScreen(),
         ),
       );
-    } else {
+    } catch (e) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Harap isi Email dan Password terlebih dahulu!'),
+        SnackBar(
+          content: Text('Login gagal: ${e.toString()}'),
           backgroundColor: Colors.red,
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -126,15 +191,15 @@ class _LoginGuruScreenState extends State<LoginGuruScreen> {
                           // Field Email
                           TextFormField(
                             controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
+                            keyboardType: TextInputType.text,
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
-                                return 'Email tidak boleh kosong!';
+                                return 'Email atau NIY tidak boleh kosong!';
                               }
                               return null;
                             },
                             decoration: InputDecoration(
-                              hintText: 'Email',
+                              hintText: 'Email atau NIY',
                               hintStyle: TextStyle(color: Colors.grey.shade400),
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 20,
@@ -270,7 +335,7 @@ class _LoginGuruScreenState extends State<LoginGuruScreen> {
 
                           // Tombol Sign In
                           ElevatedButton(
-                            onPressed: _handleSignIn,
+                            onPressed: _isLoading ? null : _handleSignIn,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF41735E),
                               foregroundColor: Colors.white,
@@ -280,13 +345,22 @@ class _LoginGuruScreenState extends State<LoginGuruScreen> {
                               ),
                               elevation: 0,
                             ),
-                            child: const Text(
-                              'Sign In',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
+                            child: _isLoading
+                            ? const SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Sign In',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
                           ),
                           const SizedBox(height: 24),
 
