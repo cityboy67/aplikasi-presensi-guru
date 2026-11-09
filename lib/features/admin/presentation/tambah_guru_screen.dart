@@ -11,6 +11,7 @@ class TambahGuruScreen extends StatefulWidget {
 
 class _TambahGuruScreenState extends State<TambahGuruScreen> {
   // Controller untuk form
+  final _formKey = GlobalKey<FormState>();
   final _namaController = TextEditingController();
   final _niyController = TextEditingController();
   final _emailController = TextEditingController();
@@ -70,22 +71,67 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
   bool _isLoading = false;
 
   void _simpanData() {
-    setState(() {
-      _isLoading = true;
-    });
+    // Validasi seluruh input Form.
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-    // Simulasi proses menyimpan data
-    Future.delayed(const Duration(seconds: 2), () {
-      setState(() {
-        _isLoading = false;
-      });
+    // Validasi foto wajib dipilih.
+    if (_fotoGuruBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Data guru berhasil didaftarkan!'),
-          backgroundColor: Color(0xFF43816B),
+          content: Text('Silakan pilih foto resmi guru terlebih dahulu.'),
+          backgroundColor: Colors.red,
         ),
       );
-    });
+      return;
+    }
+
+    // Validasi NIY 7 digit.
+    final niy = _niyController.text.trim();
+
+    if (!RegExp(r'^\d{7}$').hasMatch(niy)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('NIY harus terdiri dari 7 digit angka.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Validasi email.
+    final email = _emailController.text.trim();
+
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Format email tidak valid.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Validasi nomor WhatsApp.
+    final noTelepon = _waController.text.trim();
+
+    if (!RegExp(r'^[0-9+]{10,15}$').hasMatch(noTelepon)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nomor WhatsApp harus terdiri dari 10-15 digit.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Validasi formulir berhasil.'),
+        backgroundColor: Color(0xFF43816B),
+      ),
+    );
   }
 
   @override
@@ -95,23 +141,29 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
       appBar: _buildAppBar(),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildFotoResmiCard(),
-              const SizedBox(height: 12),
-              _buildIdentitasCard(),
-              const SizedBox(height: 12),
-              _buildAkunCard(),
-              const SizedBox(height: 12),
-              _buildAkademikCard(),
-              const SizedBox(height: 24),
-              _buildPrimaryButton(),
-              const SizedBox(height: 12),
-              _buildSecondaryButton(),
-              const SizedBox(height: 32),
-            ],
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16.0,
+            vertical: 16.0,
+          ),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildFotoResmiCard(),
+                const SizedBox(height: 12),
+                _buildIdentitasCard(),
+                const SizedBox(height: 12),
+                _buildAkunCard(),
+                const SizedBox(height: 12),
+                _buildAkademikCard(),
+                const SizedBox(height: 24),
+                _buildPrimaryButton(),
+                const SizedBox(height: 12),
+                _buildSecondaryButton(),
+                const SizedBox(height: 32),
+              ],
+            ),
           ),
         ),
       ),
@@ -341,16 +393,32 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
             hint: 'Contoh: Siti Rahmawati, S.Pd, M.Pd.',
             icon: Icons.person_outline,
             controller: _namaController,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Nama wajib diisi';
+              }
+              return null;
+            },
           ),
           const SizedBox(height: 12),
           _buildTextField(
             label: 'NIY',
-            hint: 'Masukkan 7 DIgit NIY',
+            isRequired: true,
+            hint: 'Masukkan 7 Digit NIY',
             icon: Icons.badge_outlined,
             controller: _niyController,
             keyboardType: TextInputType.number,
             maxLength: 7,
             rightLabel: '7 Digit Terverifikasi',
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'NIY wajib diisi';
+              }
+              if (!RegExp(r'^\d{7}$').hasMatch(value.trim())) {
+                return 'NIY harus terdiri dari 7 digit';
+              }
+              return null;
+            },
           ),
         ],
       ),
@@ -367,14 +435,26 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
           const SizedBox(height: 16),
           _buildTextField(
             label: 'Email Guru',
+            isRequired: true,
             hint: 'nama.guru@gmail.com',
             icon: Icons.email_outlined,
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Email wajib diisi';
+              }
+              if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                  .hasMatch(value.trim())) {
+                return 'Format email tidak valid';
+              }
+              return null;
+            },
           ),
           const SizedBox(height: 12),
           _buildTextField(
             label: 'Nomor WhatsApp Aktif',
+            isRequired: true,
             hint: '0812-XXXX-XXXX',
             icon: Icons.phone_outlined,
             controller: _waController,
@@ -388,6 +468,15 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
                 color: Color(0xFF00D83D),
               ),
             ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Nomor WhatsApp wajib diisi';
+              }
+              if (!RegExp(r'^[0-9+]{10,15}$').hasMatch(value.trim())) {
+                return 'Nomor WhatsApp tidak valid';
+              }
+              return null;
+            },
           ),
         ],
       ),
@@ -540,6 +629,7 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
     TextInputType keyboardType = TextInputType.text,
     TextEditingController? controller,
     int? maxLength,
+    String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -567,7 +657,8 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
                       color: Color(0xFFFF4545),
                     ),
                   ),
-                if (rightLabelTextWidget != null) rightLabelTextWidget,
+                if (rightLabelTextWidget != null)
+                  rightLabelTextWidget,
               ],
             ),
             if (rightLabel != null)
@@ -583,7 +674,7 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
         ),
         const SizedBox(height: 6),
         Container(
-          height: 42,
+          constraints: const BoxConstraints(minHeight: 42),
           decoration: BoxDecoration(
             color: Colors.white,
             border: Border.all(color: const Color(0xFFE1E5E9)),
@@ -593,13 +684,18 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Icon(icon, size: 16, color: const Color(0xFF858585)),
+                child: Icon(
+                  icon,
+                  size: 16,
+                  color: const Color(0xFF858585),
+                ),
               ),
               Expanded(
-                child: TextField(
+                child: TextFormField(
                   controller: controller,
                   keyboardType: keyboardType,
                   maxLength: maxLength,
+                  validator: validator,
                   style: const TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 12,
@@ -607,8 +703,10 @@ class _TambahGuruScreenState extends State<TambahGuruScreen> {
                   ),
                   decoration: InputDecoration(
                     hintText: hint,
-                    counterText: "", // Hide character counter
-                    hintStyle: const TextStyle(color: Color(0xFFB8BEC6)),
+                    counterText: "",
+                    hintStyle: const TextStyle(
+                      color: Color(0xFFB8BEC6),
+                    ),
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding: const EdgeInsets.only(
