@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class TambahGuruScreen extends StatefulWidget {
   const TambahGuruScreen({Key? key}) : super(key: key);
@@ -9,129 +10,223 @@ class TambahGuruScreen extends StatefulWidget {
   State<TambahGuruScreen> createState() => _TambahGuruScreenState();
 }
 
-class _TambahGuruScreenState extends State<TambahGuruScreen> {
-  // Controller untuk form
-  final _formKey = GlobalKey<FormState>();
-  final _namaController = TextEditingController();
-  final _niyController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _waController = TextEditingController();
+  class _TambahGuruScreenState extends State<TambahGuruScreen> {
+    // Controller untuk form
+    final _formKey = GlobalKey<FormState>();
+    final _namaController = TextEditingController();
+    final _niyController = TextEditingController();
+    final _emailController = TextEditingController();
+    final _waController = TextEditingController();
+    final supabase = Supabase.instance.client;
 
-  // Variable untuk menyimpan foto guru
-  Uint8List? _fotoGuruBytes;
-  String? _fotoGuruName;
+    // Variable untuk menyimpan foto guru
+    Uint8List? _fotoGuruBytes;
+    String? _fotoGuruName;
 
-  final ImagePicker _imagePicker = ImagePicker();
+    final ImagePicker _imagePicker = ImagePicker();
 
-  //Fungsi untuk memilih foto dari galeri
-  Future<void> _pilihFoto() async {
-    try {
-      final XFile? foto = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
+    //Fungsi untuk memilih foto dari galeri
+    Future<void> _pilihFoto() async {
+      try {
+        final XFile? foto = await _imagePicker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 85,
+        );
 
-      if (foto == null) return;
+        if (foto == null) return;
 
-      final bytes = await foto.readAsBytes();
+        final bytes = await foto.readAsBytes();
 
-      // Validasi ukuran maksimal 2 MB.
-      if (bytes.length > 2 * 1024 * 1024) {
+        // Validasi ukuran maksimal 2 MB.
+        if (bytes.length > 2 * 1024 * 1024) {
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ukuran foto maksimal 2 MB.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        setState(() {
+          _fotoGuruBytes = bytes;
+          _fotoGuruName = foto.name;
+        });
+      } catch (e) {
         if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memilih foto: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+
+    // Dropdown value
+    final String _guruJenis = 'Wali Kelas';
+
+    bool _isLoading = false;
+
+    Future<void> _simpanData() async {
+      // 1. Validasi formulir
+      if (!_formKey.currentState!.validate()) return;
+
+      if (_fotoGuruBytes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Ukuran foto maksimal 2 MB.'),
+            content: Text('Foto guru wajib dipilih'),
             backgroundColor: Colors.red,
           ),
         );
         return;
       }
 
-      setState(() {
-        _fotoGuruBytes = bytes;
-        _fotoGuruName = foto.name;
-      });
-    } catch (e) {
-      if (!mounted) return;
+      if (_isLoading) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal memilih foto: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      setState(() => _isLoading = true);
+
+      try {
+        final nama = _namaController.text.trim();
+        final niy = _niyController.text.trim();
+        final email = _emailController.text.trim().toLowerCase();
+        final noTelepon = _waController.text.trim();
+
+        // 2. Upload foto ke Supabase Storage
+        final fotoPath = await _uploadFotoGuru(niy);
+
+        // 3. Panggil Edge Function untuk membuat akun guru
+        final result = await supabase.functions.invoke(
+          'buat-akun-guru',
+          body: {
+            'nama': nama,
+            'niy': niy,
+            'email': email,
+            'no_telepon': noTelepon,
+            'foto_url': fotoPath,
+          },
+        );
+
+        // 4. Periksa hasil respons
+        final data = Map<String, dynamic>.from(result.data as Map);
+
+        if (data['success'] != true) {
+          throw Exception(data['error'] ?? 'Gagal membuat akun guru');
+        }
+
+        final password = data['password_awal']?.toString() ?? '';
+
+        if (password.isEmpty) {
+          throw Exception('Password awal tidak diterima dari server');
+        }
+
+        if (!mounted) return;
+
+        // 5. Tampilkan informasi akun kepada Admin
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('Guru Berhasil Ditambahkan'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Akun guru berhasil dibuat. Berikan informasi berikut kepada guru:'),
+                  const SizedBox(height: 16),
+                  const Text('Nama Guru'),
+                  Text(nama),
+                  const SizedBox(height: 10),
+                  const Text('NIY'),
+                  SelectableText(niy),
+                  const SizedBox(height: 10),
+                  const Text('Email'),
+                  SelectableText(email),
+                  const SizedBox(height: 10),
+                  const Text('Password Awal'),
+                  SelectableText(
+                    password,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Simpan password ini sebelum menutup dialog. '
+                    'Password tidak dapat dilihat kembali dari database.',
+                    style: TextStyle(fontSize: 12, color: Colors.red),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Selesai'),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (!mounted) return;
+
+        // 6. Bersihkan formulir setelah berhasil
+        _namaController.clear();
+        _niyController.clear();
+        _emailController.clear();
+        _waController.clear();
+
+        setState(() {
+          _fotoGuruBytes = null;
+          _fotoGuruName = null;
+        });
+
+      } catch (e) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menambahkan guru: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
     }
-  }
 
-
-  // Dropdown value
-  final String _guruJenis = 'Wali Kelas';
-
-  bool _isLoading = false;
-
-  void _simpanData() {
-    // Validasi seluruh input Form.
-    if (!_formKey.currentState!.validate()) {
-      return;
+  // Fungsi untuk mengunggah foto guru ke Supabase Storage
+  Future<String> _uploadFotoGuru(String niy) async {
+    if (_fotoGuruBytes == null || _fotoGuruName == null) {
+      throw Exception('Foto guru belum dipilih');
     }
 
-    // Validasi foto wajib dipilih.
-    if (_fotoGuruBytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Silakan pilih foto resmi guru terlebih dahulu.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+    final extension = _fotoGuruName!.split('.').last.toLowerCase();
 
-    // Validasi NIY 7 digit.
-    final niy = _niyController.text.trim();
+    final filePath =
+        'guru/$niy/${DateTime.now().millisecondsSinceEpoch}.$extension';
 
-    if (!RegExp(r'^\d{7}$').hasMatch(niy)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('NIY harus terdiri dari 7 digit angka.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+    final contentType = extension == 'png'
+        ? 'image/png'
+        : 'image/jpeg';
 
-    // Validasi email.
-    final email = _emailController.text.trim();
-
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Format email tidak valid.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // Validasi nomor WhatsApp.
-    final noTelepon = _waController.text.trim();
-
-    if (!RegExp(r'^[0-9+]{10,15}$').hasMatch(noTelepon)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Nomor WhatsApp harus terdiri dari 10-15 digit.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Validasi formulir berhasil.'),
-        backgroundColor: Color(0xFF43816B),
+    await supabase.storage.from('foto-guru').uploadBinary(
+      filePath,
+      _fotoGuruBytes!,
+      fileOptions: FileOptions(
+        contentType: contentType,
+        upsert: false,
       ),
     );
+
+    return filePath;
   }
 
   @override
