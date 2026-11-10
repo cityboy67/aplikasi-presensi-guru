@@ -3,6 +3,8 @@ import 'pengajuan_izin_screen.dart';
 import 'pengajuan_sakit_screen.dart';
 import 'edit_profile_screen.dart';
 import '../../auth/presentation/role_selection_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 
 class GuruDashboardScreen extends StatefulWidget {
   const GuruDashboardScreen({super.key});
@@ -14,9 +16,122 @@ class GuruDashboardScreen extends StatefulWidget {
 class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
   int _selectedBottomIndex = 0; // 0: Absen, 1: Perizinan, 2: Profil
 
-  String _guruName = 'Budi Abdan';
-  String _guruEmail = 'Budiabdan@gmail.com';
-  String _guruAddress = 'Pondok Gusgas 2';
+  DateTime _waktuSekarang = DateTime.now()
+      .toUtc()
+      .add(const Duration(hours: 7));
+
+  Timer? _clockTimer;
+
+  final supabase = Supabase.instance.client;
+
+  String _guruName = 'Memuat...';
+  String _guruEmail = '';
+  String _guruJenis = '';
+  String? _guruFotoUrl;
+
+  bool _isLoadingProfile = true;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _loadGuruProfile();
+
+    _clockTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) {
+        if (!mounted) return;
+
+        setState(() {
+          _waktuSekarang = DateTime.now()
+              .toUtc()
+              .add(const Duration(hours: 7));
+        });
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadGuruProfile() async {
+    try {
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        throw Exception('Pengguna belum login.');
+      }
+
+      final response = await supabase
+          .from('guru')
+          .select(
+            'guru_id, nama, email, niy, guru_jenis, '
+            'status, foto_url, no_telepon',
+          )
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (response == null) {
+        throw Exception('Data guru tidak ditemukan.');
+      }
+
+      // Ambil data profil terlebih dahulu.
+      final nama = response['nama']?.toString() ?? '-';
+      final email =
+          response['email']?.toString() ?? user.email ?? '-';
+      final jenis = response['guru_jenis']?.toString() ?? '-';
+
+      if (!mounted) return;
+
+      setState(() {
+        _guruName = nama;
+        _guruEmail = email;
+        _guruJenis = jenis;
+        _isLoadingProfile = false;
+      });
+
+      // Ambil foto secara terpisah agar kegagalan foto
+      // tidak menghambat pemuatan profil.
+      String? fotoUrl;
+      final fotoPath = response['foto_url']?.toString();
+
+      if (fotoPath != null && fotoPath.isNotEmpty) {
+        try {
+          fotoUrl = await supabase.storage
+              .from('foto-guru')
+              .createSignedUrl(fotoPath, 3600);
+        } catch (e) {
+          debugPrint('Gagal mengambil foto guru: $e');
+          debugPrint('Path foto pada database: $fotoPath');
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _guruFotoUrl = fotoUrl;
+      });
+
+    } catch (e) {
+      debugPrint('Gagal mengambil profil guru: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingProfile = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memuat profil: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -240,16 +355,31 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                   border: Border.all(color: Colors.grey.shade400, width: 4),
                 ),
                 child: ClipOval(
-                  child: Image.asset(
-                    'assets/images/guru_photo.png',
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.grey.shade300,
-                        child: const Icon(Icons.person, size: 65, color: Colors.grey),
-                      );
-                    },
-                  ),
+                  child: _guruFotoUrl != null
+                      ? Image.network(
+                          _guruFotoUrl!,
+                          width: 130,
+                          height: 130,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey.shade300,
+                              child: const Icon(
+                                Icons.person,
+                                color: Colors.grey,
+                                size: 32,
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          color: Colors.grey.shade300,
+                          child: const Icon(
+                            Icons.person,
+                            color: Colors.grey,
+                            size: 32,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 18),
@@ -276,31 +406,32 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               ),
               const SizedBox(height: 36),
 
-              _buildProfileMenuCard(
-                title: 'Edit Profile',
-                icon: Icons.person_outline_rounded,
-                onTap: () async {
-                  final dynamic result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => EditProfileScreen(
-                        initialName: _guruName,
-                        initialEmail: _guruEmail,
-                        initialAddress: _guruAddress,
-                      ),
+             _buildProfileMenuCard(
+              title: 'Edit Profile',
+              icon: Icons.person_outline_rounded,
+              onTap: () async {
+                final dynamic result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditProfileScreen(
+                      initialName: _guruName,
+                      initialEmail: _guruEmail,
+                      initialAddress: '',
                     ),
-                  );
+                  ),
+                );
 
-                  if (result != null && result is Map) {
-                    setState(() {
-                      _guruName = (result['name'] as String?) ?? _guruName;
-                      _guruEmail = (result['email'] as String?) ?? _guruEmail;
-                      _guruAddress = (result['address'] as String?) ?? _guruAddress;
-                    });
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
+                if (result != null && result is Map) {
+                  setState(() {
+                    _guruName = (result['name'] as String?) ?? _guruName;
+                    _guruEmail = (result['email'] as String?) ?? _guruEmail;
+                  });
+
+                  await _loadGuruProfile();
+                }
+              },
+            ),
+            const SizedBox(height: 16),
 
               _buildProfileMenuCard(
                 title: 'Settings',
@@ -634,16 +765,31 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
             border: Border.all(color: Colors.grey.shade300, width: 2),
           ),
           child: ClipOval(
-            child: Image.asset(
-              'assets/images/guru_photo.png',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  color: Colors.grey.shade300,
-                  child: const Icon(Icons.person, color: Colors.grey, size: 32),
-                );
-              },
-            ),
+            child: _guruFotoUrl != null
+                ? Image.network(
+                    _guruFotoUrl!,
+                    width: 58,
+                    height: 58,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey.shade300,
+                        child: const Icon(
+                          Icons.person,
+                          color: Colors.grey,
+                          size: 32,
+                        ),
+                      );
+                    },
+                  )
+                : Container(
+                    color: Colors.grey.shade300,
+                    child: const Icon(
+                      Icons.person,
+                      color: Colors.grey,
+                      size: 32,
+                    ),
+                  ),
           ),
         ),
         const SizedBox(width: 14),
@@ -661,9 +807,9 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
-              const Text(
-                'Guru penjas',
-                style: TextStyle(
+              Text(
+                _guruJenis,
+                style: const TextStyle(
                   fontSize: 14,
                   color: Colors.black54,
                 ),
@@ -675,20 +821,58 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
     );
   }
 
+  
   Widget _buildDateTimeBanner() {
+    const namaHari = [
+      'Minggu',
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+    ];
+
+    const namaBulan = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+
+    final hari = namaHari[_waktuSekarang.weekday % 7];
+    final tanggal = _waktuSekarang.day;
+    final bulan = namaBulan[_waktuSekarang.month - 1];
+    final tahun = _waktuSekarang.year;
+
+    final jam = _waktuSekarang.hour.toString().padLeft(2, '0');
+    final menit = _waktuSekarang.minute.toString().padLeft(2, '0');
+    final detik = _waktuSekarang.second.toString().padLeft(2, '0');
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 12,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFF16B555),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: const Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Flexible(
             child: Text(
-              'Selasa, 15 September 2026',
-              style: TextStyle(
+              '$hari, $tanggal $bulan $tahun',
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
@@ -696,10 +880,10 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Text(
-            '19:30:00',
-            style: TextStyle(
+            '$jam:$menit:$detik',
+            style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
               fontSize: 14,
