@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../guru/presentation/guru_dashboard_screen.dart';
+import '../../guru/presentation/ganti_password_guru_screen.dart';
 
 class LoginGuruScreen extends StatefulWidget {
   const LoginGuruScreen({super.key});
@@ -53,7 +54,7 @@ class _LoginGuruScreenState extends State<LoginGuruScreen> {
         throw Exception('Login gagal. Periksa email/NIY dan password.');
       }
 
-      final responseData = response.data as Map<String, dynamic>;
+      final responseData = Map<String, dynamic>.from(response.data as Map);
       final refreshToken = responseData['refresh_token'] as String?;
 
       if (refreshToken == null || refreshToken.isEmpty) {
@@ -72,13 +73,18 @@ class _LoginGuruScreenState extends State<LoginGuruScreen> {
       // Memastikan akun benar-benar terdaftar sebagai guru.
       final guru = await supabase
           .from('guru')
-          .select('guru_id, nama, email, niy, status')
+          .select('guru_id, nama, email, niy, status, wajib_ganti_password')
           .eq('user_id', user.id)
           .maybeSingle();
 
       if (guru == null) {
         await supabase.auth.signOut();
         throw Exception('Akun ini tidak terdaftar sebagai guru.');
+      }
+
+      if (guru['status'] != 'Aktif') {
+        await supabase.auth.signOut();
+        throw Exception('Akun guru tidak aktif. Hubungi Admin.');
       }
 
       if (!mounted) return;
@@ -90,12 +96,23 @@ class _LoginGuruScreenState extends State<LoginGuruScreen> {
         ),
       );
 
+      final statusPassword = guru['wajib_ganti_password'];
+
+      debugPrint('DATA GURU: $guru');
+      debugPrint('NILAI WAJIB GANTI PASSWORD: $statusPassword');
+      debugPrint('TIPE DATA: ${statusPassword.runtimeType}');
+
+      final wajibGantiPassword = statusPassword == true;
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => const GuruDashboardScreen(),
+          builder: (context) => wajibGantiPassword
+              ? const GantiPasswordGuruScreen()
+              : const GuruDashboardScreen(),
         ),
       );
+      
     } catch (e) {
       if (!mounted) return;
 

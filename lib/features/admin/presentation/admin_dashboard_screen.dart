@@ -3,6 +3,7 @@ import 'detail_guru_screen.dart';
 import 'detail_presensi_admin_screen.dart';
 import 'rekap_presensi_screen.dart';
 import 'tambah_guru_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -15,16 +16,104 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _selectedNav = 0;
 
   // Dummy data guru
-  List<Map<String, dynamic>> teachers = List.generate(
-    4,
-    (index) => {
-      "name": "Muhammad Budi",
-      "nip": "19850412 201001 1 015",
-      "subject": "Teknik Jaringan",
-      "status": "AKTIF",
-      "image": "assets/images/foto_guru.jpg",
-    },
-  );
+  final supabase = Supabase.instance.client;
+
+  List<Map<String, dynamic>> teachers = [];
+  bool _isLoadingTeachers = true;
+  String _searchQuery = '';
+
+  final TextEditingController _searchController =
+      TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTeachers();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadTeachers() async {
+    try {
+      final response = await supabase
+          .from('guru')
+          .select(
+            'guru_id, nama, niy, email, no_telepon, '
+            'guru_jenis, status, foto_url, user_id',
+          )
+          .order('nama');
+
+      final List<Map<String, dynamic>> loadedTeachers = [];
+
+      for (final row in response) {
+        final data = Map<String, dynamic>.from(row);
+
+        String? imageUrl;
+        final fotoPath = data['foto_url'] as String?;
+
+        if (fotoPath != null && fotoPath.isNotEmpty) {
+          try {
+            imageUrl = await supabase.storage
+                .from('foto-guru')
+                .createSignedUrl(fotoPath, 3600);
+
+            debugPrint('Path foto: $fotoPath');
+            debugPrint('URL foto: $imageUrl');
+          } catch (e) {
+            debugPrint('Gagal mengambil foto: $e');
+          }
+        } else {
+          debugPrint('Foto guru belum memiliki path.');
+        }
+
+        loadedTeachers.add({
+          ...data,
+          'name': data['nama'] ?? '-',
+          'niy': data['niy']?.toString() ?? '-',
+          'subject': data['guru_jenis'] ?? 'Wali Kelas',
+          'status': data['status'] ?? 'Tidak diketahui',
+          'imageUrl': imageUrl,
+        });
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        teachers = loadedTeachers;
+        _isLoadingTeachers = false;
+      });
+    } catch (e) {
+      debugPrint('Gagal mengambil data guru: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingTeachers = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memuat data guru: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  List<Map<String, dynamic>> get filteredTeachers {
+    final query = _searchQuery.toLowerCase();
+
+    return teachers.where((teacher) {
+      final nama = (teacher['name'] ?? '').toString().toLowerCase();
+      final niy = (teacher['niy'] ?? '').toString().toLowerCase();
+
+      return nama.contains(query) || niy.contains(query);
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,15 +152,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           const SizedBox(height: 40),
           _buildSearchBar(),
           const SizedBox(height: 38),
-          ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: teachers.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 20),
-            itemBuilder: (_, index) =>
-                _buildTeacherCard(teachers[index], index),
-          ),
+
+          if (_isLoadingTeachers)
+            const Padding(
+              padding: EdgeInsets.all(40),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (filteredTeachers.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(40),
+              child: Center(
+                child: Text('Data guru tidak ditemukan.'),
+              ),
+            )
+          else
+            ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: filteredTeachers.length,
+              separatorBuilder: (_, __) =>
+                  const SizedBox(height: 20),
+              itemBuilder: (_, index) {
+                final teacher = filteredTeachers[index];
+
+                return _buildTeacherCard(
+                  teacher,
+                  teachers.indexOf(teacher),
+                );
+              },
+            ),
+
           const SizedBox(height: 48),
           _buildAddTeacherButton(context),
           const SizedBox(height: 36),
@@ -179,16 +292,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         children: [
           const Icon(Icons.search, size: 16, color: Color(0xFF9299A2)),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: TextField(
-              style: TextStyle(
+              controller: _searchController,
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
+              style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 11,
                 color: Color(0xFF263347),
               ),
-              decoration: InputDecoration(
-                hintText: 'Cari nama, NIP, atau mata pelajaran...',
-                hintStyle: TextStyle(color: Color(0xFF9299A2), fontSize: 11),
+              decoration: const InputDecoration(
+                hintText: 'Cari nama atau NIY guru...',
+                hintStyle: TextStyle(
+                  color: Color(0xFF9299A2),
+                  fontSize: 11,
+                ),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
@@ -241,8 +363,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.asset(
-                              data['image'] as String,
+                            child: Image.network(
+                              data['imageUrl'] ?? '',
                               width: 42,
                               height: 42,
                               fit: BoxFit.cover,
@@ -306,7 +428,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  'NIP: ${data['nip']}',
+                                  'NIY: ${data['niy']}',
                                   style: const TextStyle(
                                     fontFamily: 'Poppins',
                                     fontSize: 9,
@@ -429,14 +551,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         ),
                       ),
                       InkWell(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => DetailGuruScreen(guru: data),
-                            ),
-                          );
-                        },
+                       onTap: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => DetailGuruScreen(guru: data),
+                          ),
+                        );
+
+                        if (result == true && mounted) {
+                          _loadTeachers();
+                        }
+                      },
                         child: Container(
                           height: 24,
                           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -497,11 +623,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
-          onTap: () {
-            Navigator.push(
+          onTap: () async {
+            await Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const TambahGuruScreen()),
+              MaterialPageRoute(
+                builder: (_) => const TambahGuruScreen(),
+              ),
             );
+
+            if (mounted) {
+              _loadTeachers();
+            }
           },
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,

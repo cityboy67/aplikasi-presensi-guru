@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
 
 class DetailGuruScreen extends StatefulWidget {
   final Map<String, dynamic> guru;
@@ -10,9 +13,14 @@ class DetailGuruScreen extends StatefulWidget {
 
 class _DetailGuruScreenState extends State<DetailGuruScreen> {
   late final TextEditingController _namaController;
-  late final TextEditingController _nipController;
+  late final TextEditingController _niyController;
   late final TextEditingController _emailController;
   late final TextEditingController _waController;
+
+  final supabase = Supabase.instance.client;
+
+  Uint8List? _fotoBytes;
+  String? _fotoNama;  
 
   String? _selectedMapel;
   final List<String> _mapelList = [
@@ -26,52 +34,150 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
     'Seni Budaya',
   ];
 
+  Future<void> _pilihFoto() async {
+    final picker = ImagePicker();
+
+    final XFile? foto = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+
+    if (foto == null) return;
+
+    final bytes = await foto.readAsBytes();
+
+    setState(() {
+      _fotoBytes = bytes;
+      _fotoNama = foto.name;
+    });
+  }
+
   bool _isEditing = false;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    // Isi data dari guru yang dipilih
+
     _namaController = TextEditingController(
-      text: widget.guru['name'] as String? ?? '',
+      text: widget.guru['nama']?.toString() ?? '',
     );
-    _nipController = TextEditingController(
-      text: widget.guru['nip'] as String? ?? '',
+
+    _niyController = TextEditingController(
+      text: widget.guru['niy']?.toString() ?? '',
     );
+
     _emailController = TextEditingController(
-      text:
-          '${(widget.guru['name'] as String? ?? 'guru').toLowerCase().replaceAll(' ', '.')}@sekolah.sch.id',
+      text: widget.guru['email']?.toString() ?? '',
     );
-    _waController = TextEditingController(text: '0812-XXXX-XXXX');
-    _selectedMapel = _mapelList.contains(widget.guru['subject'])
-        ? widget.guru['subject'] as String
-        : null;
+
+    _waController = TextEditingController(
+      text: widget.guru['no_telepon']?.toString() ?? '',
+    );
   }
 
   @override
   void dispose() {
     _namaController.dispose();
-    _nipController.dispose();
+    _niyController.dispose();
     _emailController.dispose();
     _waController.dispose();
     super.dispose();
   }
 
-  void _simpanData() async {
+  Future<void> _simpanData() async {
+    final guruId = widget.guru['guru_id'];
+
+    if (guruId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('ID guru tidak ditemukan.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_namaController.text.trim().isEmpty ||
+        _niyController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nama dan NIY wajib diisi.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
-    if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      _isEditing = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Data guru berhasil diperbarui!'),
-        backgroundColor: Color(0xFF43816B),
-      ),
-    );
+
+    try {
+      // 1. Siapkan data foto
+      String? fotoPath;
+
+      if (_fotoBytes != null) {
+        final niy = _niyController.text.trim();
+
+        final filePath =
+            'guru/$niy/${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+        // 2. Upload foto baru ke Supabase Storage
+        await supabase.storage.from('foto-guru').uploadBinary(
+          filePath,
+          _fotoBytes!,
+          fileOptions: const FileOptions(
+            contentType: 'image/jpeg',
+            upsert: false,
+          ),
+        );
+
+        fotoPath = filePath;
+      }
+
+      // 3. Siapkan data yang akan diperbarui
+      final updateData = <String, dynamic>{
+        'nama': _namaController.text.trim(),
+        'niy': int.parse(_niyController.text.trim()),
+        'no_telepon': _waController.text.trim(),
+      };
+
+      if (fotoPath != null) {
+        updateData['foto_url'] = fotoPath;
+      }
+
+      // 4. Update tabel guru
+      await supabase
+          .from('guru')
+          .update(updateData)
+          .eq('guru_id', guruId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _isEditing = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data guru berhasil diperbarui!'),
+          backgroundColor: Color(0xFF43816B),
+        ),
+      );
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memperbarui data: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -189,8 +295,8 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
 
   // ── STATUS BANNER ────────────────────────────────────────────
   Widget _buildStatusBanner() {
-    final status = widget.guru['status'] as String? ?? 'AKTIF';
-    final isAktif = status == 'AKTIF';
+    final status = widget.guru['status']?.toString() ?? 'Tidak diketahui';
+    final isAktif = status.trim().toLowerCase() == 'aktif';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -275,34 +381,20 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
                   border: Border.all(color: const Color(0xFF00D83D), width: 2),
                 ),
                 child: ClipOval(
-                  child: Image.asset(
-                    widget.guru['image'] as String? ??
-                        'assets/images/foto_guru.jpg',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.person_outline,
-                          color: Color(0xFF6D5CE7),
-                          size: 32,
-                        ),
-                        Text(
-                          // Ambil inisial dari nama
-                          (widget.guru['name'] as String? ?? 'G')
-                              .split(' ')
-                              .map((e) => e.isNotEmpty ? e[0] : '')
-                              .take(2)
-                              .join(),
-                          style: const TextStyle(
-                            fontSize: 10,
+                  child: _fotoBytes != null
+                      ? Image.memory(
+                          _fotoBytes!,
+                          fit: BoxFit.cover,
+                        )
+                      : Image.network(
+                          widget.guru['imageUrl']?.toString() ?? '',
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.person_outline,
                             color: Color(0xFF6D5CE7),
-                            fontWeight: FontWeight.bold,
+                            size: 32,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
                 ),
               ),
               if (_isEditing)
@@ -346,7 +438,7 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
           if (_isEditing) ...[
             const SizedBox(height: 12),
             ElevatedButton.icon(
-              onPressed: () {},
+              onPressed: _pilihFoto,
               icon: const Icon(
                 Icons.upload_file,
                 size: 14,
@@ -393,13 +485,12 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
           ),
           const SizedBox(height: 12),
           _buildTextField(
-            label: 'NIP',
-            hint: '18 Digit NIP atau NUPTK',
+            label: 'NIY',
+            hint: 'Masukkan 7 digit NIY',
             icon: Icons.badge_outlined,
-            controller: _nipController,
+            controller: _niyController,
             keyboardType: TextInputType.number,
-            maxLength: 18,
-            rightLabel: '18 Digit Terverifikasi',
+            maxLength: 7,
             enabled: _isEditing,
           ),
         ],
@@ -421,7 +512,7 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
             icon: Icons.email_outlined,
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
-            enabled: _isEditing,
+            enabled: false,
           ),
           const SizedBox(height: 12),
           _buildTextField(
@@ -454,95 +545,42 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
         children: [
           _buildSectionHeader('03', 'Akademik', null),
           const SizedBox(height: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Text(
-                    'Mata Pelajaran Utama',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF252525),
-                    ),
-                  ),
-                  Text(
-                    ' *',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFFF4545),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Container(
-                height: 42,
-                decoration: BoxDecoration(
-                  color: _isEditing ? Colors.white : const Color(0xFFF8F9FA),
-                  border: Border.all(color: const Color(0xFFE1E5E9)),
-                  borderRadius: BorderRadius.circular(5),
+          const Text(
+            'Jenis Guru',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF252525),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FA),
+              border: Border.all(color: const Color(0xFFE1E5E9)),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: const Row(
+              children: [
+                Icon(
+                  Icons.menu_book_outlined,
+                  size: 16,
+                  color: Color(0xFF858585),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.menu_book_outlined,
-                      size: 16,
-                      color: Color(0xFF858585),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _isEditing
-                          ? DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _selectedMapel,
-                                isExpanded: true,
-                                hint: const Text(
-                                  'Pilih mata pelajaran',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 12,
-                                    color: Color(0xFFB8BEC6),
-                                  ),
-                                ),
-                                icon: const Icon(
-                                  Icons.keyboard_arrow_down,
-                                  color: Color(0xFF858585),
-                                ),
-                                items: _mapelList.map((v) {
-                                  return DropdownMenuItem<String>(
-                                    value: v,
-                                    child: Text(
-                                      v,
-                                      style: const TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 12,
-                                        color: Color(0xFF252525),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                                onChanged: (v) =>
-                                    setState(() => _selectedMapel = v),
-                              ),
-                            )
-                          : Text(
-                              _selectedMapel ?? widget.guru['subject'] ?? '-',
-                              style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                color: Color(0xFF252525),
-                              ),
-                            ),
-                    ),
-                  ],
+                SizedBox(width: 8),
+                Text(
+                  'Wali Kelas',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    color: Color(0xFF252525),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
