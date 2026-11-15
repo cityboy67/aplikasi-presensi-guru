@@ -8,6 +8,9 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'dart:io';
+import 'presensi_camera_screen.dart';
+import '../data/presensi_service.dart';
 
 class GuruDashboardScreen extends StatefulWidget {
   const GuruDashboardScreen({super.key});
@@ -57,6 +60,16 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
   String _statusLokasi = 'Memuat lokasi...';
   bool _isLoadingLokasi = true;
   bool _dalamRadius = false;
+  
+  // Foto bukti presensi
+  File? _fotoBukti;
+
+  // Status pengiriman presensi
+  bool _isSubmittingPresensi = false;
+
+  // History presensi
+  List<Map<String, dynamic>> _historyData = [];
+  bool _isLoadingHistory = true;
 
   // Location information
   @override
@@ -272,6 +285,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
 
       if (_guruId != null) {
         await _loadDeviceInfo();
+        await _loadHistoryPresensi();
       }
 
       // Ambil foto secara terpisah agar kegagalan foto
@@ -311,6 +325,36 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  // Load history presensi for the guru
+  Future<void> _loadHistoryPresensi() async {
+    try {
+      if (_guruId == null) return;
+
+      final response = await supabase
+          .from('presensi')
+          .select('tanggal, jam, status')
+          .eq('guru_id', _guruId!)
+          .order('tanggal', ascending: false)
+          .order('jam', ascending: false)
+          .limit(5);
+
+      if (!mounted) return;
+
+      setState(() {
+        _historyData = List<Map<String, dynamic>>.from(response);
+        _isLoadingHistory = false;
+      });
+    } catch (e) {
+      debugPrint('Gagal mengambil riwayat presensi: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingHistory = false;
+      });
     }
   }
 
@@ -1425,36 +1469,70 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: Image.asset(
-                  'assets/images/guru_photo1.png',
-                  height: 220,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
+                child: _fotoBukti != null
+                  ? Image.file(
+                      _fotoBukti!,
                       height: 220,
-                      color: Colors.grey.shade300,
-                      child: const Center(
-                        child: Icon(Icons.person, size: 60, color: Colors.grey),
-                      ),
-                    );
-                  },
-                ),
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    )
+                  : Image.asset(
+                      'assets/images/guru_photo1.png',
+                      height: 220,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          height: 220,
+                          color: Colors.grey.shade300,
+                          child: const Center(
+                            child: Icon(
+                              Icons.person,
+                              size: 60,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
               ),
               Positioned(
                 top: 10,
                 right: 10,
                 child: ElevatedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.camera_alt_rounded, size: 13),
+                  onPressed: () async {
+                    final hasilFoto = await Navigator.push<File>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            const PresensiCameraScreen(),
+                      ),
+                    );
+
+                    if (hasilFoto != null && mounted) {
+                      setState(() {
+                        _fotoBukti = hasilFoto;
+                      });
+                    }
+                  },
+                  icon: const Icon(
+                    Icons.camera_alt_rounded,
+                    size: 13,
+                  ),
                   label: const Text(
                     'Ambil Ulang',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xE635775B),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     shape: RoundedRectangleBorder(
@@ -1475,22 +1553,97 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Presensi berhasil dikirim!'),
-              backgroundColor: Color(0xFF35775B),
-            ),
-          );
-        },
-        icon: const Icon(Icons.send_rounded, size: 20),
-        label: const Text(
-          'Kirim Absen',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+        onPressed: _isSubmittingPresensi
+            ? null
+            : () async {
+                // Pastikan foto sudah diambil.
+                if (_fotoBukti == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Silakan ambil foto bukti presensi terlebih dahulu.',
+                      ),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+
+                setState(() {
+                  _isSubmittingPresensi = true;
+                });
+
+                try {
+                  final service = PresensiService();
+
+                  final hasil = await service.kirimPresensi(
+                    foto: _fotoBukti!,
+                  );
+
+                  if (!mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        hasil['message']?.toString() ??
+                            'Terjadi kesalahan saat mengirim presensi.',
+                      ),
+                      backgroundColor: hasil['success'] == true
+                          ? const Color(0xFF35775B)
+                          : Colors.red,
+                      duration: const Duration(seconds: 4),
+                    ),
+                  );
+
+                  if (hasil['success'] == true) {
+                    debugPrint(
+                      'PRESENSI BERHASIL: ${hasil['foto_bukti']}',
+                    );
+                    debugPrint(
+                      'JARAK SEKOLAH: ${hasil['jarak']} meter',
+                    );
+                  }
+                } catch (e) {
+                  if (!mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Gagal mengirim presensi: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                } finally {
+                  if (mounted) {
+                    setState(() {
+                      _isSubmittingPresensi = false;
+                    });
+                  }
+                }
+              },
+        icon: _isSubmittingPresensi
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.send_rounded, size: 20),
+        label: Text(
+          _isSubmittingPresensi
+              ? 'Mengirim Presensi...'
+              : 'Kirim Absen',
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF35775B),
           foregroundColor: Colors.white,
+          disabledBackgroundColor: const Color(0xFF35775B),
+          disabledForegroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -1502,12 +1655,23 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
   }
 
   Widget _buildHistorySection() {
-    final historyData = [
-      {'date': 'Selasa, 15 September 2026', 'status': 'Masuk', 'time': '19:19:41'},
-      {'date': 'Senin, 14 September 2026', 'status': 'Masuk', 'time': '19:19:41'},
-      {'date': 'Minggu, 13 September 2026', 'status': 'Masuk', 'time': '19:19:41'},
-      {'date': 'Sabtu, 12 September 2026', 'status': 'Masuk', 'time': '19:19:41'},
+    const namaHari = [
+      'Minggu', 'Senin', 'Selasa', 'Rabu',
+      'Kamis', 'Jumat', 'Sabtu'
     ];
+
+    const namaBulan = [
+      'Januari', 'Februari', 'Maret', 'April',
+      'Mei', 'Juni', 'Juli', 'Agustus',
+      'September', 'Oktober', 'November', 'Desember'
+    ];
+
+    String formatTanggal(String tanggal) {
+      final date = DateTime.parse(tanggal);
+
+      return '${namaHari[date.weekday % 7]}, '
+          '${date.day} ${namaBulan[date.month - 1]} ${date.year}';
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1534,73 +1698,98 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
             ),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Column(
-            children: List.generate(historyData.length, (index) {
-              final item = historyData[index];
-              final isLast = index == historyData.length - 1;
-
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                item['date']!,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.exit_to_app_rounded,
-                                    color: Color(0xFF16B555),
-                                    size: 14,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    item['status']!,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          item['time']!,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ],
-                    ),
+          child: _isLoadingHistory
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(),
                   ),
-                  if (!isLast)
-                    const Divider(
-                      color: Colors.black12,
-                      height: 12,
-                      thickness: 0.8,
+                )
+              : _historyData.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('Belum ada riwayat presensi.'),
+                      ),
+                    )
+                  : Column(
+                      children: List.generate(
+                        _historyData.length,
+                        (index) {
+                          final item = _historyData[index];
+                          final isLast =
+                              index == _historyData.length - 1;
+
+                          return Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            formatTanggal(
+                                              item['tanggal'].toString(),
+                                            ),
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.black87,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.exit_to_app_rounded,
+                                                color: Color(0xFF16B555),
+                                                size: 14,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                item['status']?.toString() ??
+                                                    'Hadir',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Text(
+                                      item['jam']?.toString() ?? '-',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (!isLast)
+                                const Divider(
+                                  color: Colors.black12,
+                                  height: 12,
+                                  thickness: 0.8,
+                                ),
+                            ],
+                          );
+                        },
+                      ),
                     ),
-                ],
-              );
-            }),
-          ),
         ),
       ],
     );
