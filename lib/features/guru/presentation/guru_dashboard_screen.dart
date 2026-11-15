@@ -5,6 +5,9 @@ import 'edit_profile_screen.dart';
 import '../../auth/presentation/role_selection_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'package:geolocator/geolocator.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 class GuruDashboardScreen extends StatefulWidget {
   const GuruDashboardScreen({super.key});
@@ -16,6 +19,7 @@ class GuruDashboardScreen extends StatefulWidget {
 class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
   int _selectedBottomIndex = 0; // 0: Absen, 1: Perizinan, 2: Profil
 
+  // Waktu dalam zona waktu WIB (UTC+7)
   DateTime _waktuSekarang = DateTime.now()
       .toUtc()
       .add(const Duration(hours: 7));
@@ -24,6 +28,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
 
   final supabase = Supabase.instance.client;
 
+  // Guru profile information
   String _guruName = 'Memuat...';
   String _guruEmail = '';
   String _guruJenis = '';
@@ -31,11 +36,35 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
 
   bool _isLoadingProfile = true;
 
+  // Device information
+  String? _guruId;
+
+  String _deviceNama = 'Belum terdaftar';
+  String _deviceIdentifier = '-';
+  String _deviceStatus = 'Belum Terikat';
+
+  bool _isLoadingDevice = true;
+
+  // Location information
+  double? _latitudeGuru;
+  double? _longitudeGuru;
+  double? _jarakSekolah;
+
+  double? _latitudeSekolah;
+  double? _longitudeSekolah;
+  int _radiusSekolah = 100;
+
+  String _statusLokasi = 'Memuat lokasi...';
+  bool _isLoadingLokasi = true;
+  bool _dalamRadius = false;
+
+  // Location information
   @override
   void initState() {
     super.initState();
 
     _loadGuruProfile();
+    _loadLokasiSekolah();
 
     _clockTimer = Timer.periodic(
       const Duration(seconds: 1),
@@ -57,6 +86,153 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
     super.dispose();
   }
 
+  // Load device information based on guru_id
+  Future<void> _loadDeviceInfo() async {
+    try {
+      if (_guruId == null) return;
+
+      final response = await supabase
+          .from('device')
+          .select(
+            'device_nama, device_identifier, status_binding',
+          )
+          .eq('guru_id', _guruId!)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      setState(() {
+        if (response != null) {
+          _deviceNama = response['device_nama'] ?? '-';
+          _deviceIdentifier =
+              response['device_identifier'] ?? '-';
+          _deviceStatus =
+              response['status_binding'] ?? 'Belum Terikat';
+        } else {
+          _deviceNama = 'Belum terdaftar';
+          _deviceIdentifier = '-';
+          _deviceStatus = 'Belum Terikat';
+        }
+
+        _isLoadingDevice = false;
+      });
+    } catch (e) {
+      debugPrint('Gagal mengambil informasi perangkat: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingDevice = false;
+      });
+    }
+  }
+
+  // Load lokasi sekolah from Supabase
+  Future<void> _loadLokasiSekolah() async {
+    try {
+      final response = await supabase
+          .from('lokasi_presensi')
+          .select('latitude, longitude, radius')
+          .eq('status', true)
+          .limit(1)
+          .maybeSingle();
+
+      if (response == null) {
+        throw Exception('Lokasi sekolah belum tersedia.');
+      }
+
+      _latitudeSekolah =
+          (response['latitude'] as num).toDouble();
+
+      _longitudeSekolah =
+          (response['longitude'] as num).toDouble();
+
+      _radiusSekolah =
+          (response['radius'] as num).toInt();
+
+      await _ambilLokasiGuru();
+    } catch (e) {
+      debugPrint('Gagal mengambil lokasi sekolah: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _statusLokasi = 'Lokasi sekolah tidak tersedia';
+        _isLoadingLokasi = false;
+      });
+    }
+  }
+
+  // Ambil lokasi guru menggunakan Geolocator
+  Future<void> _ambilLokasiGuru() async {
+    try {
+      bool serviceEnabled =
+          await Geolocator.isLocationServiceEnabled();
+
+      if (!serviceEnabled) {
+        throw Exception('GPS HP belum diaktifkan.');
+      }
+
+      LocationPermission permission =
+          await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied) {
+        throw Exception('Izin lokasi belum diberikan.');
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception(
+          'Izin lokasi ditolak permanen. '
+          'Aktifkan melalui pengaturan aplikasi.',
+        );
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      final jarak = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        _latitudeSekolah!,
+        _longitudeSekolah!,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _latitudeGuru = position.latitude;
+        _longitudeGuru = position.longitude;
+        _jarakSekolah = jarak;
+
+        _dalamRadius = jarak <= _radiusSekolah;
+
+        _statusLokasi = _dalamRadius
+            ? 'DALAM RADIUS SEKOLAH'
+            : 'DI LUAR RADIUS SEKOLAH';
+
+        _isLoadingLokasi = false;
+      });
+    } catch (e) {
+      debugPrint('Gagal mengambil GPS: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _statusLokasi = e.toString().replaceFirst('Exception: ', '');
+        _isLoadingLokasi = false;
+        _dalamRadius = false;
+      });
+    }
+  }
+
+  // Load guru profile information from Supabase
   Future<void> _loadGuruProfile() async {
     try {
       final user = supabase.auth.currentUser;
@@ -87,11 +263,16 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
       if (!mounted) return;
 
       setState(() {
+        _guruId = response['guru_id']?.toString();
         _guruName = nama;
         _guruEmail = email;
         _guruJenis = jenis;
         _isLoadingProfile = false;
       });
+
+      if (_guruId != null) {
+        await _loadDeviceInfo();
+      }
 
       // Ambil foto secara terpisah agar kegagalan foto
       // tidak menghambat pemuatan profil.
@@ -894,13 +1075,22 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
     );
   }
 
+  // 4. WIDGET KARTU PERANGKAT
   Widget _buildDeviceCard() {
+    final isTerikat = _deviceStatus == 'Terikat' || _deviceStatus == 'Aktif';
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 12,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF52C488), width: 1.2),
+        border: Border.all(
+          color: const Color(0xFF52C488),
+          width: 1.2,
+        ),
       ),
       child: Row(
         children: [
@@ -917,23 +1107,27 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
             ),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Redmi Note 11 Pro',
-                  style: TextStyle(
+                  _isLoadingDevice
+                      ? 'Memuat perangkat...'
+                      : _deviceNama,
+                  style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                     color: Colors.black87,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
-                SizedBox(height: 2),
+                const SizedBox(height: 2),
                 Text(
-                  'Model : 2201116TG',
-                  style: TextStyle(
+                  _isLoadingDevice
+                      ? 'Memeriksa status perangkat'
+                      : 'Status: $_deviceStatus',
+                  style: const TextStyle(
                     color: Colors.black45,
                     fontSize: 11,
                   ),
@@ -942,9 +1136,17 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               ],
             ),
           ),
-          const Icon(
-            Icons.check_circle_rounded,
-            color: Color(0xFF52C488),
+          Icon(
+            _isLoadingDevice
+                ? Icons.hourglass_empty
+                : isTerikat
+                    ? Icons.check_circle_rounded
+                    : Icons.error_outline_rounded,
+            color: _isLoadingDevice
+                ? Colors.grey
+                : isTerikat
+                    ? const Color(0xFF52C488)
+                    : Colors.orange,
             size: 22,
           ),
         ],
@@ -952,31 +1154,67 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
     );
   }
 
+  // 5. WIDGET KARTU PETA LOKASI 
   Widget _buildLocationMapCard() {
+    final bool lokasiTersedia =
+        _latitudeSekolah != null &&
+        _longitudeSekolah != null;
+
+    final bool gpsTersedia =
+        _latitudeGuru != null &&
+        _longitudeGuru != null;
+
+    final Color statusColor = _isLoadingLokasi
+        ? Colors.orange
+        : _dalamRadius
+            ? const Color(0xFF52C488)
+            : Colors.red;
+
+    final LatLng? posisiSekolah = lokasiTersedia
+        ? LatLng(_latitudeSekolah!, _longitudeSekolah!)
+        : null;
+
+    final LatLng? posisiGuru = gpsTersedia
+        ? LatLng(_latitudeGuru!, _longitudeGuru!)
+        : null;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF52C488), width: 1.2),
+        border: Border.all(
+          color: const Color(0xFF52C488),
+          width: 1.2,
+        ),
       ),
       child: Column(
         children: [
+          // STATUS LOKASI
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 8,
+            ),
             decoration: BoxDecoration(
               color: const Color(0xFFE8F7EE),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.location_on_rounded, color: Color(0xFFE67E22), size: 18),
-                SizedBox(width: 8),
+                const Icon(
+                  Icons.location_on_rounded,
+                  color: Color(0xFFE67E22),
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'DALAM RADIUS SEKOLAH',
+                    _isLoadingLokasi
+                        ? 'MEMERIKSA LOKASI...'
+                        : _statusLokasi,
                     style: TextStyle(
-                      color: Color(0xFF1B6A42),
+                      color: statusColor,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                       letterSpacing: 0.3,
@@ -984,37 +1222,172 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Icon(Icons.check_circle_rounded, color: Color(0xFF52C488), size: 18),
+                if (_isLoadingLokasi)
+                  const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                    ),
+                  )
+                else
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _dalamRadius
+                            ? Icons.check_circle_rounded
+                            : Icons.location_off_rounded,
+                        color: statusColor,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: _isLoadingLokasi
+                            ? null
+                            : _ambilLokasiGuru,
+                        borderRadius: BorderRadius.circular(20),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.refresh_rounded,
+                            color: Color(0xFF1B6A42),
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
+
           const SizedBox(height: 10),
+
+          // PETA INTERAKTIF
           ClipRRect(
             borderRadius: BorderRadius.circular(14),
-            child: Image.asset(
-              'assets/images/map_sample.png',
-              height: 150,
+            child: SizedBox(
+              height: 200,
               width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  height: 150,
-                  color: Colors.grey.shade200,
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+              child: posisiSekolah == null
+                  ? const Center(
+                      child: Text(
+                        'Lokasi sekolah belum tersedia',
+                      ),
+                    )
+                  : FlutterMap(
+                      options: MapOptions(
+                          initialCenter: posisiSekolah,
+                          initialZoom: 16,
+                          minZoom: 5,
+                          maxZoom: 19,
+                          onMapReady: () {
+                            debugPrint('MAP BERHASIL DIINISIALISASI');
+                          },
+                        ),
                       children: [
-                        Icon(Icons.map_rounded, color: Colors.grey, size: 36),
-                        SizedBox(height: 4),
-                        Text(
-                          'Simpan gambar peta di assets/images/map_sample.png',
-                          style: TextStyle(fontSize: 11, color: Colors.black45),
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName:
+                              'com.example.flutter_application_1',
+                          tileBuilder: (context, tileWidget, tile) {
+                            debugPrint('MAP TILE LOADED: ${tile.coordinates}');
+                            return tileWidget;
+                          },
+                          errorTileCallback: (tile, error, stackTrace) {
+                            debugPrint('MAP TILE ERROR: $error');
+                          },
+                        ),
+
+                        // LINGKARAN RADIUS SEKOLAH
+                        CircleLayer(
+                          circles: [
+                            CircleMarker(
+                              point: posisiSekolah,
+                              radius: _radiusSekolah.toDouble(),
+                              useRadiusInMeter: true,
+                              color: const Color(0x3352C488),
+                              borderColor:
+                                  const Color(0xFF16B555),
+                              borderStrokeWidth: 2,
+                            ),
+                          ],
+                        ),
+
+                        // MARKER SEKOLAH DAN GURU
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: posisiSekolah,
+                              width: 45,
+                              height: 45,
+                              child: const Icon(
+                                Icons.location_on,
+                                color: Colors.red,
+                                size: 40,
+                              ),
+                            ),
+                            if (posisiGuru != null)
+                              Marker(
+                                point: posisiGuru,
+                                width: 40,
+                                height: 40,
+                                child: const Icon(
+                                  Icons.my_location,
+                                  color: Colors.blue,
+                                  size: 32,
+                                ),
+                              ),
+                          ],
+                        ),
+
+                        const RichAttributionWidget(
+                          attributions: [
+                            TextSourceAttribution(
+                              'OpenStreetMap contributors',
+                            ),
+                          ],
                         ),
                       ],
                     ),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // INFORMASI JARAK
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.social_distance_rounded,
+                color: statusColor,
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  _jarakSekolah != null
+                      ? 'Jarak ke sekolah: ${_jarakSekolah!.round()} meter'
+                      : 'Jarak belum tersedia',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
                   ),
-                );
-              },
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            'Radius presensi: $_radiusSekolah meter',
+            style: const TextStyle(
+              color: Colors.black54,
+              fontSize: 11,
             ),
           ),
         ],

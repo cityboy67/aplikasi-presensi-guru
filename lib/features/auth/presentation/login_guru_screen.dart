@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../guru/presentation/guru_dashboard_screen.dart';
 import '../../guru/presentation/ganti_password_guru_screen.dart';
+import '../../../core/services/device_binding_service.dart';
 
 class LoginGuruScreen extends StatefulWidget {
   const LoginGuruScreen({super.key});
@@ -85,6 +86,22 @@ class _LoginGuruScreenState extends State<LoginGuruScreen> {
       if (guru['status'] != 'Aktif') {
         await supabase.auth.signOut();
         throw Exception('Akun guru tidak aktif. Hubungi Admin.');
+      }
+     
+      // DEVICE BINDING OTOMATIS
+      final deviceBinding = DeviceBindingService();
+
+      final bindingResult = await deviceBinding.bindDevice();
+
+      debugPrint('HASIL DEVICE BINDING: $bindingResult');
+
+      if (bindingResult['success'] != true) {
+        await supabase.auth.signOut();
+
+        throw Exception(
+          bindingResult['message'] ??
+              'Perangkat tidak dapat diverifikasi.',
+        );
       }
 
       if (!mounted) return;
