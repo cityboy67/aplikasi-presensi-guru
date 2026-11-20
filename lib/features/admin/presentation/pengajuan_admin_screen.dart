@@ -233,112 +233,410 @@ class _PengajuanAdminScreenState extends State<PengajuanAdminScreen> {
     }
 
     final noteController = TextEditingController();
+    bool saving = false;
     String? validationMessage;
+    final isSick = item['tipe_pengajuan'] == 'Sakit';
 
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) {
-        bool saving = false;
-        return StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Tinjau Pengajuan'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item['nama_guru'].toString(),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 5),
-                  Text('${item['tipe_pengajuan']} • ${item['tanggal_tampilan']}'),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Catatan Admin (opsional)',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-                  ),
-                  const SizedBox(height: 7),
-                  TextField(
-                    controller: noteController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      hintText: 'Tulis catatan untuk guru...',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  if (validationMessage != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      validationMessage!,
-                      style: const TextStyle(color: Colors.red, fontSize: 12),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: saving ? null : () => Navigator.pop(dialogContext),
-                child: const Text('Batal'),
-              ),
-              TextButton(
-                onPressed: saving
-                    ? null
-                    : () async {
-                        setDialogState(() => saving = true);
-                        try {
-                          await _updateRequest(
-                            item,
-                            'Ditolak',
-                            noteController.text,
-                          );
-                        } catch (_) {
-                          setDialogState(() {
-                            saving = false;
-                            validationMessage = 'Gagal menyimpan keputusan.';
-                          });
-                        }
-                      },
-                child: const Text(
-                  'Tolak',
-                  style: TextStyle(color: Colors.red),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: saving
-                    ? null
-                    : () async {
-                        setDialogState(() => saving = true);
-                        try {
-                          await _updateRequest(
-                            item,
-                            'Disetujui',
-                            noteController.text,
-                          );
-                        } catch (_) {
-                          setDialogState(() {
-                            saving = false;
-                            validationMessage = 'Gagal menyimpan keputusan.';
-                          });
-                        }
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _green,
-                  foregroundColor: Colors.white,
-                ),
-                child: saving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Setujui'),
-              ),
-            ],
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => Dialog(
+          backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 22,
+            vertical: 22,
           ),
-        );
-      },
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header dibuat sama dengan modal Detail Pengajuan.
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 17, 16, 17),
+                  decoration: const BoxDecoration(
+                    color: _green,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          isSick
+                              ? Icons.medical_services_outlined
+                              : Icons.event_note_outlined,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Tinjau Pengajuan',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              'Periksa informasi sebelum memberi keputusan',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        onPressed: saving
+                            ? null
+                            : () => Navigator.pop(dialogContext),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                item['nama_guru'].toString(),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF26352E),
+                                ),
+                              ),
+                            ),
+                            _statusPill('Menunggu'),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          'NIY: ${item['niy_guru']} • ${item['guru_jenis']}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFF89928D),
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Divider(
+                            height: 1,
+                            color: Color(0xFFEDF0EE),
+                          ),
+                        ),
+                        _detailInfoRow(
+                          Icons.category_outlined,
+                          'Jenis Pengajuan',
+                          '${item['tipe_pengajuan']} • ${item['judul_jenis']}',
+                        ),
+                        _detailInfoRow(
+                          Icons.calendar_month_outlined,
+                          'Tanggal Pengajuan',
+                          item['tanggal_tampilan'].toString(),
+                        ),
+                        _detailInfoRow(
+                          isSick
+                              ? Icons.medical_information_outlined
+                              : Icons.notes,
+                          isSick ? 'Keterangan Sakit' : 'Alasan Pengajuan',
+                          item['keterangan_tampilan'].toString(),
+                        ),
+                        if ((item['delegasi'] ?? '').toString().trim().isNotEmpty)
+                          _detailInfoRow(
+                            Icons.person_outline,
+                            'Delegasi',
+                            item['delegasi'].toString(),
+                          ),
+
+                        // Lampiran tetap dapat dibuka sebelum keputusan dibuat.
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 15),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF4F8F5),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFFE5EEE8),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.picture_as_pdf_rounded,
+                                color: _green,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 10),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Dokumen Lampiran',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF26352E),
+                                      ),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'Periksa dokumen PDF pengajuan',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        color: Color(0xFF89928D),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => _openDocument(item),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: _green,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 8,
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Buka PDF',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const Text(
+                          'Catatan Admin (Opsional)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF26352E),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: noteController,
+                          enabled: !saving,
+                          minLines: 3,
+                          maxLines: 4,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: InputDecoration(
+                            hintText: 'Tuliskan catatan untuk guru...',
+                            hintStyle: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF9AA19D),
+                            ),
+                            filled: true,
+                            fillColor: const Color(0xFFFAFBFA),
+                            contentPadding: const EdgeInsets.all(13),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE1E8E3),
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE1E8E3),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: _green,
+                                width: 1.4,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (validationMessage != null) ...[
+                          const SizedBox(height: 9),
+                          Text(
+                            validationMessage!,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Tombol keputusan dipisahkan di footer agar konsisten
+                // dengan modal detail dan tetap mudah digunakan di layar HP.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 5, 16, 17),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: saving
+                              ? null
+                              : () => Navigator.pop(dialogContext),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF69736D),
+                            side: const BorderSide(
+                              color: Color(0xFFDDE3DF),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                          ),
+                          child: const Text(
+                            'Batal',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: saving
+                              ? null
+                              : () async {
+                                  setDialogState(() {
+                                    saving = true;
+                                    validationMessage = null;
+                                  });
+                                  try {
+                                    await _updateRequest(
+                                      item,
+                                      'Ditolak',
+                                      noteController.text,
+                                    );
+                                  } catch (_) {
+                                    if (dialogContext.mounted) {
+                                      setDialogState(() {
+                                        saving = false;
+                                        validationMessage =
+                                            'Gagal menyimpan keputusan. Coba lagi.';
+                                      });
+                                    }
+                                  }
+                                },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFD64545),
+                            side: const BorderSide(
+                              color: Color(0xFFD64545),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                          ),
+                          child: const Text(
+                            'Tolak',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: saving
+                              ? null
+                              : () async {
+                                  setDialogState(() {
+                                    saving = true;
+                                    validationMessage = null;
+                                  });
+                                  try {
+                                    await _updateRequest(
+                                      item,
+                                      'Disetujui',
+                                      noteController.text,
+                                    );
+                                  } catch (_) {
+                                    if (dialogContext.mounted) {
+                                      setDialogState(() {
+                                        saving = false;
+                                        validationMessage =
+                                            'Gagal menyimpan keputusan. Coba lagi.';
+                                      });
+                                    }
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _green,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                          ),
+                          child: saving
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Setujui',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
 
     noteController.dispose();
