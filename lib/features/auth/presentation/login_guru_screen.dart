@@ -125,7 +125,9 @@ class _LoginGuruScreenState extends State<LoginGuruScreen> {
         context,
         MaterialPageRoute(
           builder: (context) => wajibGantiPassword
-              ? const GantiPasswordGuruScreen()
+              ? const GantiPasswordGuruScreen(
+                  wajibGantiPassword: true,
+                )
               : const GuruDashboardScreen(),
         ),
       );

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'guru_dashboard_screen.dart';
 
 class GantiPasswordGuruScreen extends StatefulWidget {
-  const GantiPasswordGuruScreen({super.key});
+  final bool wajibGantiPassword;
+
+  const GantiPasswordGuruScreen({
+    super.key,
+    this.wajibGantiPassword = false,
+  });
 
   @override
   State<GantiPasswordGuruScreen> createState() =>
@@ -42,7 +46,15 @@ class _GantiPasswordGuruScreenState
       final user = supabase.auth.currentUser;
 
       if (user == null) {
-        throw Exception('Sesi login tidak ditemukan. Silakan login kembali.');
+        throw Exception(
+          'Sesi login tidak ditemukan. Silakan login kembali.',
+        );
+      }
+
+      final email = user.email;
+
+      if (email == null || email.isEmpty) {
+        throw Exception('Email akun tidak ditemukan.');
       }
 
       final passwordLama = _passwordLamaController.text;
@@ -54,28 +66,46 @@ class _GantiPasswordGuruScreenState
         );
       }
 
-      // 1. Mengubah password pada Supabase Auth
+      // 1. Verifikasi password lama melalui Supabase Auth.
+      final authResponse = await supabase.auth.signInWithPassword(
+        email: email,
+        password: passwordLama,
+      );
+
+      if (authResponse.user == null ||
+          authResponse.user!.id != user.id) {
+        throw Exception('Verifikasi password lama gagal.');
+      }
+
+      // 2. Perbarui password pada Supabase Auth.
       await supabase.auth.updateUser(
         UserAttributes(
-          password: _passwordBaruController.text,
+          password: passwordBaru,
         ),
       );
 
-      // 2. Mengubah status wajib ganti password
-      await supabase
-          .from('guru')
-          .update({'wajib_ganti_password': false})
-          .eq('user_id', user.id);
+      // 3. Jika ini merupakan penggantian password pertama,
+      // ubah status wajib_ganti_password menjadi false.
+      if (widget.wajibGantiPassword) {
+        await supabase
+            .from('guru')
+            .update({
+              'wajib_ganti_password': false,
+            })
+            .eq('user_id', user.id);
 
-      // 3. Memastikan perubahan berhasil
-      final guru = await supabase
-          .from('guru')
-          .select('wajib_ganti_password')
-          .eq('user_id', user.id)
-          .maybeSingle();
+        final guru = await supabase
+            .from('guru')
+            .select('wajib_ganti_password')
+            .eq('user_id', user.id)
+            .maybeSingle();
 
-      if (guru == null || guru['wajib_ganti_password'] != false) {
-        throw Exception('Status perubahan password belum berhasil disimpan.');
+        if (guru == null ||
+            guru['wajib_ganti_password'] != false) {
+          throw Exception(
+            'Status perubahan password belum berhasil disimpan.',
+          );
+        }
       }
 
       if (!mounted) return;
@@ -87,12 +117,26 @@ class _GantiPasswordGuruScreenState
         ),
       );
 
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const GuruDashboardScreen(),
+      // 4. Navigasi sesuai asal halaman.
+      if (widget.wajibGantiPassword) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const GuruDashboardScreen(),
+          ),
+          (route) => false,
+        );
+      } else {
+        Navigator.pop(context, true);
+      }
+    } on AuthException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Autentikasi gagal: ${e.message}'),
+          backgroundColor: Colors.red,
         ),
-        (route) => false,
       );
     } catch (e) {
       if (!mounted) return;
@@ -163,7 +207,7 @@ class _GantiPasswordGuruScreenState
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
+      canPop: !widget.wajibGantiPassword,
       child: Scaffold(
         backgroundColor: Colors.white,
         body: LayoutBuilder(
@@ -211,10 +255,12 @@ class _GantiPasswordGuruScreenState
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const Center(
+                            Center(
                               child: Text(
-                                'Buat Password Baru',
-                                style: TextStyle(
+                                widget.wajibGantiPassword
+                                    ? 'Buat Password Baru'
+                                    : 'Ubah Password',
+                                style: const TextStyle(
                                   fontSize: 25,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.black87,
@@ -223,8 +269,9 @@ class _GantiPasswordGuruScreenState
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              'Demi keamanan akun, silakan ganti password awal '
-                              'sebelum melanjutkan ke dashboard.',
+                              widget.wajibGantiPassword
+                                  ? 'Demi keamanan akun, silakan ganti password awal sebelum melanjutkan ke dashboard.'
+                                  : 'Silakan masukkan password lama dan buat password baru untuk akun Anda.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 13,

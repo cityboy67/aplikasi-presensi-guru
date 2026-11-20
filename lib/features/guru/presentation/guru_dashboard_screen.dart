@@ -11,6 +11,7 @@ import 'package:latlong2/latlong.dart';
 import 'dart:io';
 import 'presensi_camera_screen.dart';
 import '../data/presensi_service.dart';
+import 'ganti_password_guru_screen.dart';
 
 class GuruDashboardScreen extends StatefulWidget {
   const GuruDashboardScreen({super.key});
@@ -714,8 +715,12 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
                   onTap: () {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Membuka Form Ubah Password...')),
+
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const GantiPasswordGuruScreen(),
+                      ),
                     );
                   },
                 ),
@@ -1330,16 +1335,12 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                             debugPrint('MAP BERHASIL DIINISIALISASI');
                           },
                         ),
-                      children: [
+                      children: [    
                         TileLayer(
                           urlTemplate:
                               'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                           userAgentPackageName:
                               'com.example.flutter_application_1',
-                          tileBuilder: (context, tileWidget, tile) {
-                            debugPrint('MAP TILE LOADED: ${tile.coordinates}');
-                            return tileWidget;
-                          },
                           errorTileCallback: (tile, error, stackTrace) {
                             debugPrint('MAP TILE ERROR: $error');
                           },
