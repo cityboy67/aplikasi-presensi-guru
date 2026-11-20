@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PengajuanIzinScreen extends StatefulWidget {
   const PengajuanIzinScreen({super.key});
@@ -8,12 +12,16 @@ class PengajuanIzinScreen extends StatefulWidget {
 }
 
 class _PengajuanIzinScreenState extends State<PengajuanIzinScreen> {
-  DateTime _selectedDate = DateTime(2026, 9, 15);
+  DateTime _selectedDate = DateTime.now();
   String _selectedKategori = 'Dinas Luar/\nBimtek';
   final TextEditingController _keteranganController = TextEditingController();
   final TextEditingController _delegasiController = TextEditingController();
-  String? _uploadedFileName = 'Surat_Tugas.pdf';
-  String? _uploadedFileSize = '3 MB • Terverifikasi Siap Unggah';
+  String? _uploadedFileName;
+  String? _uploadedFileSize;
+  Uint8List? _selectedPdfBytes;
+  bool _isSubmitting = false;
+
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   final List<String> _kategoriOptions = [
     'Dinas Luar/\nBimtek',
@@ -27,6 +35,152 @@ class _PengajuanIzinScreenState extends State<PengajuanIzinScreen> {
     _keteranganController.dispose();
     _delegasiController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPdf() async {
+    try {
+      final result = await fp.FilePicker.pickFiles(
+        type: fp.FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      // Pada file_picker v12+, hasilnya List<PlatformFile>.
+      if (result.isEmpty) return;
+
+      final pickedFile = result.single;
+      if (!pickedFile.name.toLowerCase().endsWith('.pdf')) {
+        _showMessage('Format dokumen harus PDF.');
+        return;
+      }
+
+      final bytes = await pickedFile.readAsBytes();
+      final fileSize = bytes.length;
+
+      if (fileSize > 10 * 1024 * 1024) {
+        _showMessage('Ukuran PDF maksimal 10 MB.');
+        return;
+      }
+
+      setState(() {
+        _selectedPdfBytes = bytes;
+        _uploadedFileName = pickedFile.name;
+        _uploadedFileSize =
+            '${(fileSize / (1024 * 1024)).toStringAsFixed(2)} MB';
+      });
+    } catch (e) {
+      _showMessage('Gagal memilih dokumen: $e');
+    }
+  }
+
+  void _showMessage(String message, {bool success = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor:
+            success ? const Color(0xFF194432) : Colors.red.shade700,
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
+  }
+
+  Future<void> _submitPengajuan() async {
+    if (_isSubmitting) return;
+
+    if (_keteranganController.text.trim().isEmpty) {
+      _showMessage('Keterangan izin wajib diisi.');
+      return;
+    }
+
+    if (_delegasiController.text.trim().isEmpty) {
+      _showMessage('Delegasi mengajar dan piket wajib diisi.');
+      return;
+    }
+
+    if (_selectedPdfBytes == null) {
+      _showMessage('Silakan pilih dokumen pendukung dalam format PDF.');
+      return;
+    }
+
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      _showMessage('Sesi login tidak ditemukan. Silakan login kembali.');
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    String? uploadedPath;
+
+    try {
+      final guru = await _supabase
+          .from('guru')
+          .select('guru_id, status')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (guru == null) {
+        throw Exception('Data guru tidak ditemukan.');
+      }
+
+      if (guru['status'] != 'Aktif') {
+        throw Exception('Akun guru tidak aktif.');
+      }
+
+      final guruId = guru['guru_id'].toString();
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.pdf';
+      uploadedPath = '$guruId/izin/$fileName';
+
+      await _supabase.storage.from('dokumen-pengajuan').uploadBinary(
+            uploadedPath,
+            _selectedPdfBytes!,
+            fileOptions: const FileOptions(
+              contentType: 'application/pdf',
+              upsert: false,
+            ),
+          );
+
+      await _supabase.from('pengajuan_izin').insert({
+        'guru_id': guruId,
+        'jenis': 'Izin',
+        'tanggal_mulai': _formatDate(_selectedDate),
+        'tanggal_selesai': _formatDate(_selectedDate),
+        'alasan': _keteranganController.text.trim(),
+        'lampiran_url': uploadedPath,
+        'status': 'Menunggu',
+        'kategori': _selectedKategori.replaceAll('\n', ' ').trim(),
+        'delegasi': _delegasiController.text.trim(),
+      });
+
+      if (!mounted) return;
+
+      _showMessage(
+        'Pengajuan izin berhasil dikirim.',
+        success: true,
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (uploadedPath != null) {
+        try {
+          await _supabase.storage
+              .from('dokumen-pengajuan')
+              .remove([uploadedPath]);
+        } catch (_) {
+          // Jika penghapusan gagal, file dapat dibersihkan dari Storage nanti.
+        }
+      }
+
+      _showMessage('Gagal mengirim pengajuan: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -360,7 +514,7 @@ class _PengajuanIzinScreenState extends State<PengajuanIzinScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Surat undangan dinas, disposisi, atau surat keterangan (PDF/JPG maks 10MB)',
+                        'Surat undangan dinas, disposisi, atau surat keterangan (PDF maks 10MB)',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade600,
@@ -422,7 +576,9 @@ class _PengajuanIzinScreenState extends State<PengajuanIzinScreen> {
                               IconButton(
                                 onPressed: () {
                                   setState(() {
+                                    _selectedPdfBytes = null;
                                     _uploadedFileName = null;
+                                    _uploadedFileSize = null;
                                   });
                                 },
                                 icon: const Icon(
@@ -440,12 +596,7 @@ class _PengajuanIzinScreenState extends State<PengajuanIzinScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _uploadedFileName = 'Surat_Tugas_Terbaru.pdf';
-                              _uploadedFileSize = '2.5 MB • Terverifikasi Siap Unggah';
-                            });
-                          },
+                          onPressed: _isSubmitting ? null : _pickPdf,
                           icon: const Icon(Icons.description_rounded, size: 18),
                           label: Text(
                             _uploadedFileName == null
@@ -489,18 +640,21 @@ class _PengajuanIzinScreenState extends State<PengajuanIzinScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Pengajuan Izin Berhasil Dikirim!'),
-                          backgroundColor: Color(0xFF194432),
-                        ),
-                      );
-                      Navigator.pop(context);
-                    },
-                    icon: const Icon(Icons.send_rounded, size: 22),
-                    label: const Text(
-                      'Kirim Pengajuan Izin',
+                    onPressed: _isSubmitting ? null : _submitPengajuan,
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.send_rounded, size: 22),
+                    label: Text(
+                      _isSubmitting
+                          ? 'Mengirim Pengajuan...'
+                          : 'Kirim Pengajuan Izin',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,

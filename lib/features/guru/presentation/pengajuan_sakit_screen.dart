@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PengajuanSakitScreen extends StatefulWidget {
   const PengajuanSakitScreen({super.key});
@@ -8,16 +11,146 @@ class PengajuanSakitScreen extends StatefulWidget {
 }
 
 class _PengajuanSakitScreenState extends State<PengajuanSakitScreen> {
-  DateTime _selectedDate = DateTime(2026, 9, 15);
+  DateTime _selectedDate = DateTime.now();
   String _statusPerawatan = 'Rawat Mandiri'; // 'Rawat Mandiri' atau 'Rawat Inap'
   final TextEditingController _diagnosaController = TextEditingController();
-  String? _uploadedFileName = 'Surat_Dokter.pdf';
-  String? _uploadedFileSize = '2 MB • Terverifikasi Siap Unggah';
+  String? _uploadedFileName;
+  String? _uploadedFileSize;
+  Uint8List? _selectedPdfBytes;
+  bool _isSubmitting = false;
+
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   @override
   void dispose() {
     _diagnosaController.dispose();
     super.dispose();
+  }
+
+
+  Future<void> _pickPdf() async {
+    try {
+      final result = await fp.FilePicker.pickFiles(
+        type: fp.FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (result.isEmpty) return;
+
+      final pickedFile = result.single;
+      if (!pickedFile.name.toLowerCase().endsWith('.pdf')) {
+        _showMessage('Format dokumen harus PDF.');
+        return;
+      }
+
+      final bytes = await pickedFile.readAsBytes();
+      if (bytes.length > 10 * 1024 * 1024) {
+        _showMessage('Ukuran PDF maksimal 10 MB.');
+        return;
+      }
+
+      setState(() {
+        _selectedPdfBytes = bytes;
+        _uploadedFileName = pickedFile.name;
+        _uploadedFileSize =
+            '${(bytes.length / (1024 * 1024)).toStringAsFixed(2)} MB';
+      });
+    } catch (e) {
+      _showMessage('Gagal memilih dokumen: $e');
+    }
+  }
+
+  void _showMessage(String message, {bool success = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor:
+            success ? const Color(0xFF194432) : Colors.red.shade700,
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
+  }
+
+  Future<void> _submitPengajuan() async {
+    if (_isSubmitting) return;
+
+    if (_diagnosaController.text.trim().isEmpty) {
+      _showMessage('Diagnosa atau gejala sakit wajib diisi.');
+      return;
+    }
+    if (_selectedPdfBytes == null) {
+      _showMessage('Silakan pilih surat dokter dalam format PDF.');
+      return;
+    }
+
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      _showMessage('Sesi login tidak ditemukan. Silakan login kembali.');
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    String? uploadedPath;
+
+    try {
+      final guru = await _supabase
+          .from('guru')
+          .select('guru_id, status')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (guru == null) {
+        throw Exception('Data guru tidak ditemukan.');
+      }
+      if (guru['status'] != 'Aktif') {
+        throw Exception('Akun guru tidak aktif.');
+      }
+
+      final guruId = guru['guru_id'].toString();
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.pdf';
+      uploadedPath = '$guruId/sakit/$fileName';
+
+      await _supabase.storage.from('dokumen-pengajuan').uploadBinary(
+            uploadedPath,
+            _selectedPdfBytes!,
+            fileOptions: const FileOptions(
+              contentType: 'application/pdf',
+              upsert: false,
+            ),
+          );
+
+      await _supabase.from('pengajuan_sakit').insert({
+        'guru_id': guruId,
+        'tanggal_sakit': _formatDate(_selectedDate),
+        'status_perawatan': _statusPerawatan,
+        'diagnosa': _diagnosaController.text.trim(),
+        'lampiran_url': uploadedPath,
+        'status': 'Menunggu',
+      });
+
+      if (!mounted) return;
+      _showMessage('Pengajuan sakit berhasil dikirim.', success: true);
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (uploadedPath != null) {
+        try {
+          await _supabase.storage
+              .from('dokumen-pengajuan')
+              .remove([uploadedPath]);
+        } catch (_) {
+          // File yang gagal dibersihkan dapat dihapus dari Storage nanti.
+        }
+      }
+      _showMessage('Gagal mengirim pengajuan: $e');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -341,6 +474,8 @@ class _PengajuanSakitScreenState extends State<PengajuanSakitScreen> {
                                 onPressed: () {
                                   setState(() {
                                     _uploadedFileName = null;
+                                    _uploadedFileSize = null;
+                                    _selectedPdfBytes = null;
                                   });
                                 },
                                 icon: const Icon(
@@ -358,12 +493,7 @@ class _PengajuanSakitScreenState extends State<PengajuanSakitScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _uploadedFileName = 'Surat_Dokter_Terbaru.pdf';
-                              _uploadedFileSize = '1.8 MB • Terverifikasi Siap Unggah';
-                            });
-                          },
+                          onPressed: _isSubmitting ? null : _pickPdf,
                           icon: const Icon(Icons.description_rounded, size: 18),
                           label: Text(
                             _uploadedFileName == null
@@ -440,18 +570,21 @@ class _PengajuanSakitScreenState extends State<PengajuanSakitScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Pengajuan Sakit Berhasil Dikirim!'),
-                          backgroundColor: Color(0xFF194432),
-                        ),
-                      );
-                      Navigator.pop(context);
-                    },
-                    icon: const Icon(Icons.send_rounded, size: 22),
-                    label: const Text(
-                      'Kirim Pengajuan Sakit',
+                    onPressed: _isSubmitting ? null : _submitPengajuan,
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.send_rounded, size: 22),
+                    label: Text(
+                      _isSubmitting
+                          ? 'Mengirim Pengajuan...'
+                          : 'Kirim Pengajuan Sakit',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
