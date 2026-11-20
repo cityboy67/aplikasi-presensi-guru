@@ -20,7 +20,9 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
   final supabase = Supabase.instance.client;
 
   Uint8List? _fotoBytes;
-  String? _fotoNama;  
+  String? _fotoNama;
+  String? _fotoUrl;
+  bool _isFotoLoading = false;
 
   String? _selectedMapel;
   final List<String> _mapelList = [
@@ -45,6 +47,7 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
     if (foto == null) return;
 
     final bytes = await foto.readAsBytes();
+    if (!mounted) return;
 
     setState(() {
       _fotoBytes = bytes;
@@ -74,6 +77,55 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
     _waController = TextEditingController(
       text: widget.guru['no_telepon']?.toString() ?? '',
     );
+
+    _fotoUrl = null;
+    _muatFotoGuru();
+  }
+
+  String _ambilPathStorage(String value) {
+    final input = value.trim();
+    if (input.isEmpty) return '';
+
+    if (!input.startsWith('http://') && !input.startsWith('https://')) {
+      return input.startsWith('/') ? input.substring(1) : input;
+    }
+
+    final uri = Uri.tryParse(input);
+    if (uri == null) return input;
+
+    final segments = uri.pathSegments;
+    final bucketIndex = segments.indexOf('foto-guru');
+    if (bucketIndex >= 0 && bucketIndex + 1 < segments.length) {
+      return segments.skip(bucketIndex + 1).join('/');
+    }
+
+    return input;
+  }
+
+  Future<void> _muatFotoGuru() async {
+    final fotoValue = widget.guru['foto_url']?.toString();
+    if (fotoValue == null || fotoValue.trim().isEmpty) return;
+
+    if (mounted) setState(() => _isFotoLoading = true);
+
+    try {
+      final path = _ambilPathStorage(fotoValue);
+      if (path.isEmpty) return;
+
+      final signedUrl = await supabase.storage
+          .from('foto-guru')
+          .createSignedUrl(path, 3600);
+
+      if (!mounted) return;
+      setState(() {
+        _fotoUrl = signedUrl;
+        _isFotoLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Gagal memuat foto guru: $e');
+      if (!mounted) return;
+      setState(() => _isFotoLoading = false);
+    }
   }
 
   @override
@@ -98,8 +150,8 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
       return;
     }
 
-    if (_namaController.text.trim().isEmpty ||
-        _niyController.text.trim().isEmpty) {
+    final niyText = _niyController.text.trim();
+    if (_namaController.text.trim().isEmpty || niyText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Nama dan NIY wajib diisi.'),
@@ -109,19 +161,31 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
       return;
     }
 
+    if (!RegExp(r'^\d{7}$').hasMatch(niyText)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('NIY harus terdiri dari 7 angka.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
+    String? fotoPathBaru;
+    final fotoPathLamaValue = widget.guru['foto_url']?.toString();
+    final fotoPathLama = (fotoPathLamaValue == null ||
+            fotoPathLamaValue.trim().isEmpty)
+        ? null
+        : _ambilPathStorage(fotoPathLamaValue);
+
     try {
-      // 1. Siapkan data foto
-      String? fotoPath;
-
+      // Upload foto baru terlebih dahulu. Foto lama belum dihapus.
       if (_fotoBytes != null) {
-        final niy = _niyController.text.trim();
-
         final filePath =
-            'guru/$niy/${DateTime.now().millisecondsSinceEpoch}.jpg';
+            'guru/$niyText/${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-        // 2. Upload foto baru ke Supabase Storage
         await supabase.storage.from('foto-guru').uploadBinary(
           filePath,
           _fotoBytes!,
@@ -131,42 +195,73 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
           ),
         );
 
-        fotoPath = filePath;
+        fotoPathBaru = filePath;
       }
 
-      // 3. Siapkan data yang akan diperbarui
       final updateData = <String, dynamic>{
         'nama': _namaController.text.trim(),
-        'niy': int.parse(_niyController.text.trim()),
+        'niy': int.parse(niyText),
         'no_telepon': _waController.text.trim(),
       };
 
-      if (fotoPath != null) {
-        updateData['foto_url'] = fotoPath;
+      if (fotoPathBaru != null) {
+        updateData['foto_url'] = fotoPathBaru;
       }
 
-      // 4. Update tabel guru
+      // Update database. Foto lama hanya boleh dihapus setelah update sukses.
       await supabase
           .from('guru')
           .update(updateData)
           .eq('guru_id', guruId);
+
+      // Hapus foto lama setelah database menunjuk ke foto baru.
+      var fotoLamaTerhapus = true;
+      if (fotoPathBaru != null &&
+          fotoPathLama != null &&
+          fotoPathLama.isNotEmpty &&
+          fotoPathLama != fotoPathBaru) {
+        try {
+          await supabase.storage.from('foto-guru').remove([fotoPathLama]);
+        } catch (deleteError) {
+          fotoLamaTerhapus = false;
+          debugPrint('Foto lama gagal dihapus: $deleteError');
+        }
+      }
 
       if (!mounted) return;
 
       setState(() {
         _isLoading = false;
         _isEditing = false;
+        _fotoBytes = null;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Data guru berhasil diperbarui!'),
-          backgroundColor: Color(0xFF43816B),
+        SnackBar(
+          content: Text(
+            fotoPathBaru == null
+                ? 'Data guru berhasil diperbarui!'
+                : fotoLamaTerhapus
+                    ? 'Data dan foto guru berhasil diperbarui. Foto lama dihapus.'
+                    : 'Data dan foto baru berhasil disimpan, tetapi foto lama belum terhapus. Periksa izin DELETE Storage.',
+          ),
+          backgroundColor: const Color(0xFF43816B),
+          duration: const Duration(seconds: 4),
         ),
       );
 
       Navigator.pop(context, true);
     } catch (e) {
+      // Jika upload foto baru berhasil tetapi update database gagal,
+      // hapus file baru agar tidak menjadi file yatim di Storage.
+      if (fotoPathBaru != null) {
+        try {
+          await supabase.storage.from('foto-guru').remove([fotoPathBaru]);
+        } catch (cleanupError) {
+          debugPrint('Gagal membersihkan foto baru: $cleanupError');
+        }
+      }
+
       if (!mounted) return;
 
       setState(() => _isLoading = false);
@@ -327,7 +422,7 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
           ),
           const Spacer(),
           Text(
-            'NIP: ${widget.guru['nip'] ?? '-'}',
+            'NIY: ${_niyController.text}',
             style: const TextStyle(
               fontFamily: 'Poppins',
               fontSize: 10,
@@ -386,15 +481,32 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
                           _fotoBytes!,
                           fit: BoxFit.cover,
                         )
-                      : Image.network(
-                          widget.guru['imageUrl']?.toString() ?? '',
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(
-                            Icons.person_outline,
-                            color: Color(0xFF6D5CE7),
-                            size: 32,
-                          ),
-                        ),
+                      : _isFotoLoading
+                          ? const Center(
+                              child: SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : (_fotoUrl != null
+                              ? Image.network(
+                                  _fotoUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Icon(
+                                    Icons.person_outline,
+                                    color: Color(0xFF6D5CE7),
+                                    size: 32,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.person_outline,
+                                  color: Color(0xFF6D5CE7),
+                                  size: 32,
+                                )),
                 ),
               ),
               if (_isEditing)
@@ -418,7 +530,7 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            widget.guru['name'] as String? ?? '',
+            _namaController.text,
             style: const TextStyle(
               fontFamily: 'Poppins',
               fontSize: 14,
@@ -428,7 +540,7 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
           ),
           const SizedBox(height: 2),
           Text(
-            widget.guru['subject'] as String? ?? '',
+            widget.guru['guru_jenis']?.toString() ?? 'Wali Kelas',
             style: const TextStyle(
               fontFamily: 'Poppins',
               fontSize: 11,
@@ -649,7 +761,16 @@ class _DetailGuruScreenState extends State<DetailGuruScreen> {
 
   Widget _buildBatalButton() {
     return TextButton(
-      onPressed: () => setState(() => _isEditing = false),
+      onPressed: () {
+        setState(() {
+          _namaController.text = widget.guru['nama']?.toString() ?? '';
+          _niyController.text = widget.guru['niy']?.toString() ?? '';
+          _emailController.text = widget.guru['email']?.toString() ?? '';
+          _waController.text = widget.guru['no_telepon']?.toString() ?? '';
+          _fotoBytes = null;
+          _isEditing = false;
+        });
+      },
       style: TextButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
       child: const Text(
         'Batal Edit',

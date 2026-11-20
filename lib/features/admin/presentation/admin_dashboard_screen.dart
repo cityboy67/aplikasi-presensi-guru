@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'detail_guru_screen.dart';
 import 'detail_presensi_admin_screen.dart';
+import 'pengajuan_admin_screen.dart';
 import 'rekap_presensi_screen.dart';
 import 'tambah_guru_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,7 +16,6 @@ class AdminDashboardScreen extends StatefulWidget {
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _selectedNav = 0;
 
-  // Dummy data guru
   final supabase = Supabase.instance.client;
 
   List<Map<String, dynamic>> teachers = [];
@@ -36,7 +36,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     _searchController.dispose();
     super.dispose();
   }
-
 
   Future<void> _loadTeachers() async {
     try {
@@ -163,6 +162,55 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
+  Widget _navItemIcon({
+    required int index,
+    required String label,
+    required IconData icon,
+  }) {
+    final isActive = _selectedNav == index;
+
+    return GestureDetector(
+      onTap: () => setState(() => _selectedNav = index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        height: 40,
+        padding: EdgeInsets.symmetric(
+          horizontal: isActive ? 10 : 8,
+        ),
+        decoration: BoxDecoration(
+          color: isActive
+              ? const Color(0xFF6ADD8B)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(25),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 23,
+              color: isActive
+                  ? const Color(0xFF174E2B)
+                  : Colors.white70,
+            ),
+            if (isActive) ...[
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF174E2B),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   List<Map<String, dynamic>> get filteredTeachers {
     final query = _searchQuery.toLowerCase();
 
@@ -197,6 +245,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       case 1:
         return const DetailPresensiAdminScreen();
       case 2:
+        return const PengajuanAdminScreen();
+      case 3:
         return const RekapPresensiScreen();
       default:
         return _buildDashboardContent(context);
@@ -255,7 +305,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   // ── 1. HEADER BAR ────────────────────────────────────────────
   Widget _buildHeader() {
-    const titles = ['Kelola Data Guru', 'Detail Presensi', 'Rekap Presensi'];
+    const titles = [
+      'Kelola Data Guru',
+      'Detail Presensi',
+      'Pengajuan',
+      'Rekap Presensi',
+    ];
     return Container(
       height: 56,
       width: double.infinity,
@@ -757,15 +812,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               index: 0,
               label: 'Data Guru',
               imagePath: 'assets/images/nav-dashboard.png',
-              iconSize: 34, // ← besarkan icon Data Guru
+              iconSize: 30,
             ),
             _navItemImage(
               index: 1,
               label: 'Presensi',
               imagePath: 'assets/images/nav-detail-presensi.png',
             ),
-            _navItemImage(
+            _navItemIcon(
               index: 2,
+              label: 'Pengajuan',
+              icon: Icons.assignment_outlined,
+            ),
+            _navItemImage(
+              index: 3,
               label: 'Rekap',
               imagePath: 'assets/images/nav-rekap-presensi.png',
             ),
