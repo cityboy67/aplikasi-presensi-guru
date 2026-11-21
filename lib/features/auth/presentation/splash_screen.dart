@@ -23,22 +23,15 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 1800),
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeInOut,
-      ),
-    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.12),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
     _controller.forward();
 
@@ -47,9 +40,7 @@ class _SplashScreenState extends State<SplashScreen>
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) => const RoleSelectionScreen(),
-          ),
+          MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
         );
       }
     });
@@ -139,7 +130,7 @@ class _SplashScreenState extends State<SplashScreen>
                       const SizedBox(height: 4),
 
                       const Text(
-                        'Nama Aplikasi',
+                        'Al-Aqsha Presensi',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 22,
@@ -217,11 +208,7 @@ class _SplashScreenState extends State<SplashScreen>
         color: Colors.white,
         shape: BoxShape.circle,
         boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
       child: ClipOval(
@@ -231,11 +218,7 @@ class _SplashScreenState extends State<SplashScreen>
             imagePath,
             fit: BoxFit.contain,
             errorBuilder: (context, error, stackTrace) {
-              return Icon(
-                fallbackIcon,
-                color: fallbackColor,
-                size: 22,
-              );
+              return Icon(fallbackIcon, color: fallbackColor, size: 22);
             },
           ),
         ),

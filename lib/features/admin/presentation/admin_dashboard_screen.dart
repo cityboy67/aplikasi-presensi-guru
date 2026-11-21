@@ -5,6 +5,7 @@ import 'pengajuan_admin_screen.dart';
 import 'rekap_presensi_screen.dart';
 import 'tambah_guru_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../auth/presentation/role_selection_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -22,8 +23,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _isLoadingTeachers = true;
   String _searchQuery = '';
 
-  final TextEditingController _searchController =
-      TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -109,9 +109,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     try {
       final response = await supabase.functions.invoke(
         'hapus-akun-guru',
-        body: {
-          'guru_id': guruId,
-        },
+        body: {'guru_id': guruId},
       );
 
       final result = response.data;
@@ -174,13 +172,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         height: 40,
-        padding: EdgeInsets.symmetric(
-          horizontal: isActive ? 10 : 8,
-        ),
+        padding: EdgeInsets.symmetric(horizontal: isActive ? 10 : 8),
         decoration: BoxDecoration(
-          color: isActive
-              ? const Color(0xFF6ADD8B)
-              : Colors.transparent,
+          color: isActive ? const Color(0xFF6ADD8B) : Colors.transparent,
           borderRadius: BorderRadius.circular(25),
         ),
         child: Row(
@@ -189,9 +183,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             Icon(
               icon,
               size: 23,
-              color: isActive
-                  ? const Color(0xFF174E2B)
-                  : Colors.white70,
+              color: isActive ? const Color(0xFF174E2B) : Colors.white70,
             ),
             if (isActive) ...[
               const SizedBox(width: 5),
@@ -221,7 +213,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       return nama.contains(query) || niy.contains(query);
     }).toList();
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -266,16 +257,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           if (_isLoadingTeachers)
             const Padding(
               padding: EdgeInsets.all(40),
-              child: Center(
-                child: CircularProgressIndicator(),
-              ),
+              child: Center(child: CircularProgressIndicator()),
             )
           else if (filteredTeachers.isEmpty)
             const Padding(
               padding: EdgeInsets.all(40),
-              child: Center(
-                child: Text('Data guru tidak ditemukan.'),
-              ),
+              child: Center(child: Text('Data guru tidak ditemukan.')),
             )
           else
             ListView.separated(
@@ -283,15 +270,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: filteredTeachers.length,
-              separatorBuilder: (_, __) =>
-                  const SizedBox(height: 20),
+              separatorBuilder: (_, __) => const SizedBox(height: 20),
               itemBuilder: (_, index) {
                 final teacher = filteredTeachers[index];
 
-                return _buildTeacherCard(
-                  teacher,
-                  teachers.indexOf(teacher),
-                );
+                return _buildTeacherCard(teacher, teachers.indexOf(teacher));
               },
             ),
 
@@ -333,8 +316,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                icon: const Icon(Icons.menu, color: Colors.white, size: 22),
-                onPressed: () {},
+                tooltip: 'Keluar Sesi Admin',
+                icon: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.logout,
+                    color: Color(0xFFFF4444),
+                    size: 18,
+                  ),
+                ),
+                onPressed: () async {
+                  final konfirmasi = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      title: const Text('Keluar Sesi Admin'),
+                      content: const Text(
+                        'Apakah Anda yakin ingin keluar dari sesi admin?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, false),
+                          child: const Text('Batal'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, true),
+                          child: const Text(
+                            'Keluar',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (konfirmasi == true && context.mounted) {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RoleSelectionScreen(),
+                      ),
+                      (route) => false,
+                    );
+                  }
+                },
               ),
               const SizedBox(width: 12),
               Text(
@@ -422,10 +450,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
               decoration: const InputDecoration(
                 hintText: 'Cari nama atau NIY guru...',
-                hintStyle: TextStyle(
-                  color: Color(0xFF9299A2),
-                  fontSize: 11,
-                ),
+                hintStyle: TextStyle(color: Color(0xFF9299A2), fontSize: 11),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
@@ -445,296 +470,291 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   // ── 3. CARD DATA GURU ────────────────────────────────────────
 
-    Widget _buildTeacherCard(Map<String, dynamic> data, int index) {
-      return Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(
-              color: Color.fromRGBO(30, 50, 80, 0.08),
-              offset: Offset(0, 6),
-              blurRadius: 16,
+  Widget _buildTeacherCard(Map<String, dynamic> data, int index) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(
+            color: Color.fromRGBO(30, 50, 80, 0.08),
+            offset: Offset(0, 6),
+            blurRadius: 16,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Column(
+          children: [
+            Container(
+              height: 3,
+              width: double.infinity,
+              color: const Color(0xFF00CE70),
             ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Column(
-            children: [
-              Container(
-                height: 3,
-                width: double.infinity,
-                color: const Color(0xFF00CE70),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Foto Profil + green dot
-                        Stack(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                data['imageUrl'] ?? '',
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Foto Profil + green dot
+                      Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              data['imageUrl'] ?? '',
+                              width: 42,
+                              height: 42,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
                                 width: 42,
                                 height: 42,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  width: 42,
-                                  height: 42,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF4B8068)
-                                        .withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                    Icons.person,
-                                    color: Color(0xFF4B8068),
-                                    size: 24,
-                                  ),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFF4B8068,
+                                  ).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.person,
+                                  color: Color(0xFF4B8068),
+                                  size: 24,
                                 ),
                               ),
                             ),
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: Container(
-                                width: 9,
-                                height: 9,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF00D477),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 1.5,
-                                  ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 9,
+                              height: 9,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00D477),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 1.5,
                                 ),
                               ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(width: 12),
+
+                      // Info guru
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              data['name'] as String,
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF263347),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.badge_outlined,
+                                  size: 10,
+                                  color: Color(0xFF8993A1),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'NIY: ${data['niy']}',
+                                  style: const TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 9,
+                                    color: Color(0xFF8993A1),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.lan_outlined,
+                                  size: 10,
+                                  color: Color(0xFF21B6ED),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  data['subject'] as String,
+                                  style: const TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF263347),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
+                      ),
 
-                        const SizedBox(width: 12),
+                      // Badge status
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE6FAEF),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFFD2F4E1)),
+                        ),
+                        child: Text(
+                          '• ${data['status']}',
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 8,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF20B76E),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
 
-                        // Info guru
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                data['name'] as String,
-                                style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF263347),
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    height: 1,
+                    color: const Color(0xFFE9EDF2),
+                  ),
+
+                  // Tombol Hapus & Detail
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // TOMBOL HAPUS
+                      InkWell(
+                        onTap: () async {
+                          final konfirmasi = await showDialog<bool>(
+                            context: context,
+                            builder: (dialogContext) => AlertDialog(
+                              title: const Text('Hapus Guru'),
+                              content: Text(
+                                'Apakah Anda yakin ingin menghapus data ${data['name']}?\n\n'
+                                'Akun login guru juga akan dihapus secara permanen.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(dialogContext, false);
+                                  },
+                                  child: const Text('Batal'),
                                 ),
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(dialogContext, true);
+                                  },
+                                  child: const Text(
+                                    'Hapus',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+
+                          if (konfirmasi == true) {
+                            await _hapusGuru(data['guru_id'].toString());
+                          }
+                        },
+                        child: Container(
+                          height: 24,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF0F0),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline,
+                                size: 11,
+                                color: Color(0xFFF0525D),
                               ),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.badge_outlined,
-                                    size: 10,
-                                    color: Color(0xFF8993A1),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'NIY: ${data['niy']}',
-                                    style: const TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 9,
-                                      color: Color(0xFF8993A1),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 3),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.lan_outlined,
-                                    size: 10,
-                                    color: Color(0xFF21B6ED),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    data['subject'] as String,
-                                    style: const TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w500,
-                                      color: Color(0xFF263347),
-                                    ),
-                                  ),
-                                ],
+                              SizedBox(width: 4),
+                              Text(
+                                'Hapus',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFFF0525D),
+                                ),
                               ),
                             ],
                           ),
                         ),
+                      ),
 
-                        // Badge status
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 3,
-                          ),
+                      // TOMBOL DETAIL
+                      InkWell(
+                        onTap: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => DetailGuruScreen(guru: data),
+                            ),
+                          );
+
+                          if (result == true && mounted) {
+                            _loadTeachers();
+                          }
+                        },
+                        child: Container(
+                          height: 24,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE6FAEF),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: const Color(0xFFD2F4E1),
-                            ),
+                            color: const Color(0xFFF7F9FC),
+                            border: Border.all(color: const Color(0xFFE7ECF2)),
+                            borderRadius: BorderRadius.circular(6),
                           ),
-                          child: Text(
-                            '• ${data['status']}',
-                            style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 8,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF20B76E),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      height: 1,
-                      color: const Color(0xFFE9EDF2),
-                    ),
-
-                    // Tombol Hapus & Detail
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // TOMBOL HAPUS
-                        InkWell(
-                          onTap: () async {
-                            final konfirmasi = await showDialog<bool>(
-                              context: context,
-                              builder: (dialogContext) => AlertDialog(
-                                title: const Text('Hapus Guru'),
-                                content: Text(
-                                  'Apakah Anda yakin ingin menghapus data ${data['name']}?\n\n'
-                                  'Akun login guru juga akan dihapus secara permanen.',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () {
-                                      Navigator.pop(dialogContext, false);
-                                    },
-                                    child: const Text('Batal'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () {
-                                      Navigator.pop(dialogContext, true);
-                                    },
-                                    child: const Text(
-                                      'Hapus',
-                                      style: TextStyle(color: Colors.red),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-
-                            if (konfirmasi == true) {
-                              await _hapusGuru(
-                                data['guru_id'].toString(),
-                              );
-                            }
-                          },
-                          child: Container(
-                            height: 24,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFF0F0),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(
-                                  Icons.delete_outline,
-                                  size: 11,
-                                  color: Color(0xFFF0525D),
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Hapus',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w500,
-                                    color: Color(0xFFF0525D),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        // TOMBOL DETAIL
-                        InkWell(
-                          onTap: () async {
-                            final result = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => DetailGuruScreen(guru: data),
-                              ),
-                            );
-
-                            if (result == true && mounted) {
-                              _loadTeachers();
-                            }
-                          },
-                          child: Container(
-                            height: 24,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF7F9FC),
-                              border: Border.all(
-                                color: const Color(0xFFE7ECF2),
-                              ),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Row(
-                              children: [
-                                Text(
-                                  'Detail',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF263347),
-                                  ),
-                                ),
-                                SizedBox(width: 2),
-                                Icon(
-                                  Icons.chevron_right,
-                                  size: 12,
+                          child: const Row(
+                            children: [
+                              Text(
+                                'Detail',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
                                   color: Color(0xFF263347),
                                 ),
-                              ],
-                            ),
+                              ),
+                              SizedBox(width: 2),
+                              Icon(
+                                Icons.chevron_right,
+                                size: 12,
+                                color: Color(0xFF263347),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
   // ── 4. TOMBOL TAMBAH DATA GURU ───────────────────────────────
   Widget _buildAddTeacherButton(BuildContext context) {
@@ -759,9 +779,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           onTap: () async {
             await Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => const TambahGuruScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const TambahGuruScreen()),
             );
 
             if (mounted) {
