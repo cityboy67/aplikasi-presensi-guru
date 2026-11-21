@@ -24,9 +24,9 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
   int _selectedBottomIndex = 0; // 0: Absen, 1: Perizinan, 2: Profil
 
   // Waktu dalam zona waktu WIB (UTC+7)
-  DateTime _waktuSekarang = DateTime.now()
-      .toUtc()
-      .add(const Duration(hours: 7));
+  DateTime _waktuSekarang = DateTime.now().toUtc().add(
+    const Duration(hours: 7),
+  );
 
   Timer? _clockTimer;
 
@@ -61,7 +61,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
   String _statusLokasi = 'Memuat lokasi...';
   bool _isLoadingLokasi = true;
   bool _dalamRadius = false;
-  
+
   // Foto bukti presensi
   File? _fotoBukti;
 
@@ -80,18 +80,13 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
     _loadGuruProfile();
     _loadLokasiSekolah();
 
-    _clockTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) {
-        if (!mounted) return;
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
 
-        setState(() {
-          _waktuSekarang = DateTime.now()
-              .toUtc()
-              .add(const Duration(hours: 7));
-        });
-      },
-    );
+      setState(() {
+        _waktuSekarang = DateTime.now().toUtc().add(const Duration(hours: 7));
+      });
+    });
   }
 
   @override
@@ -107,9 +102,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
 
       final response = await supabase
           .from('device')
-          .select(
-            'device_nama, device_identifier, status_binding',
-          )
+          .select('device_nama, device_identifier, status_binding')
           .eq('guru_id', _guruId!)
           .maybeSingle();
 
@@ -118,10 +111,8 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
       setState(() {
         if (response != null) {
           _deviceNama = response['device_nama'] ?? '-';
-          _deviceIdentifier =
-              response['device_identifier'] ?? '-';
-          _deviceStatus =
-              response['status_binding'] ?? 'Belum Terikat';
+          _deviceIdentifier = response['device_identifier'] ?? '-';
+          _deviceStatus = response['status_binding'] ?? 'Belum Terikat';
         } else {
           _deviceNama = 'Belum terdaftar';
           _deviceIdentifier = '-';
@@ -155,14 +146,11 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
         throw Exception('Lokasi sekolah belum tersedia.');
       }
 
-      _latitudeSekolah =
-          (response['latitude'] as num).toDouble();
+      _latitudeSekolah = (response['latitude'] as num).toDouble();
 
-      _longitudeSekolah =
-          (response['longitude'] as num).toDouble();
+      _longitudeSekolah = (response['longitude'] as num).toDouble();
 
-      _radiusSekolah =
-          (response['radius'] as num).toInt();
+      _radiusSekolah = (response['radius'] as num).toInt();
 
       await _ambilLokasiGuru();
     } catch (e) {
@@ -180,15 +168,13 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
   // Ambil lokasi guru menggunakan Geolocator
   Future<void> _ambilLokasiGuru() async {
     try {
-      bool serviceEnabled =
-          await Geolocator.isLocationServiceEnabled();
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
       if (!serviceEnabled) {
         throw Exception('GPS HP belum diaktifkan.');
       }
 
-      LocationPermission permission =
-          await Geolocator.checkPermission();
+      LocationPermission permission = await Geolocator.checkPermission();
 
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -270,8 +256,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
 
       // Ambil data profil terlebih dahulu.
       final nama = response['nama']?.toString() ?? '-';
-      final email =
-          response['email']?.toString() ?? user.email ?? '-';
+      final email = response['email']?.toString() ?? user.email ?? '-';
       final jenis = response['guru_jenis']?.toString() ?? '-';
 
       if (!mounted) return;
@@ -310,7 +295,6 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
       setState(() {
         _guruFotoUrl = fotoUrl;
       });
-
     } catch (e) {
       debugPrint('Gagal mengambil profil guru: $e');
 
@@ -371,8 +355,55 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               backgroundColor: const Color(0xFF00C853),
               elevation: 0,
               leading: IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 28),
-                onPressed: () {},
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Keluar Sesi Guru',
+                icon: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.logout,
+                    color: Color(0xFFFF4444),
+                    size: 18,
+                  ),
+                ),
+                onPressed: () async {
+                  final konfirmasi = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      title: const Text('Keluar Sesi Guru'),
+                      content: const Text(
+                        'Apakah Anda yakin ingin keluar dari sesi guru?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, false),
+                          child: const Text('Batal'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, true),
+                          child: const Text(
+                            'Keluar',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (konfirmasi == true && context.mounted) {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RoleSelectionScreen(),
+                      ),
+                      (route) => false,
+                    );
+                  }
+                },
               ),
               title: _selectedBottomIndex == 2
                   ? const Text(
@@ -389,7 +420,11 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                   padding: const EdgeInsets.only(right: 16.0),
                   child: Row(
                     children: [
-                      _buildAppBarLogo('assets/images/logo_upi.png', Icons.school, Colors.red.shade700),
+                      _buildAppBarLogo(
+                        'assets/images/logo_upi.png',
+                        Icons.school,
+                        Colors.red.shade700,
+                      ),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 6.0),
                         child: Text(
@@ -401,7 +436,11 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                           ),
                         ),
                       ),
-                      _buildAppBarLogo('assets/images/logo_mitra.png', Icons.public, Colors.teal.shade700),
+                      _buildAppBarLogo(
+                        'assets/images/logo_mitra.png',
+                        Icons.public,
+                        Colors.teal.shade700,
+                      ),
                     ],
                   ),
                 ),
@@ -506,9 +545,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               child: Container(
                 decoration: const BoxDecoration(
                   color: Color(0xFFDBDBDB),
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(32),
-                  ),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
                 ),
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
@@ -516,7 +553,10 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 650),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 40.0),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20.0,
+                          vertical: 40.0,
+                        ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -528,7 +568,8 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => const PengajuanIzinScreen(),
+                                      builder: (context) =>
+                                          const PengajuanIzinScreen(),
                                     ),
                                   );
                                 },
@@ -543,7 +584,8 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => const PengajuanSakitScreen(),
+                                      builder: (context) =>
+                                          const PengajuanSakitScreen(),
                                     ),
                                   );
                                 },
@@ -632,32 +674,32 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               ),
               const SizedBox(height: 36),
 
-             _buildProfileMenuCard(
-              title: 'Edit Profile',
-              icon: Icons.person_outline_rounded,
-              onTap: () async {
-                final dynamic result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EditProfileScreen(
-                      initialName: _guruName,
-                      initialEmail: _guruEmail,
-                      initialAddress: '',
+              _buildProfileMenuCard(
+                title: 'Edit Profile',
+                icon: Icons.person_outline_rounded,
+                onTap: () async {
+                  final dynamic result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EditProfileScreen(
+                        initialName: _guruName,
+                        initialEmail: _guruEmail,
+                        initialAddress: '',
+                      ),
                     ),
-                  ),
-                );
+                  );
 
-                if (result != null && result is Map) {
-                  setState(() {
-                    _guruName = (result['name'] as String?) ?? _guruName;
-                    _guruEmail = (result['email'] as String?) ?? _guruEmail;
-                  });
+                  if (result != null && result is Map) {
+                    setState(() {
+                      _guruName = (result['name'] as String?) ?? _guruName;
+                      _guruEmail = (result['email'] as String?) ?? _guruEmail;
+                    });
 
-                  await _loadGuruProfile();
-                }
-              },
-            ),
-            const SizedBox(height: 16),
+                    await _loadGuruProfile();
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
 
               _buildProfileMenuCard(
                 title: 'Settings',
@@ -710,9 +752,18 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                 const SizedBox(height: 12),
 
                 ListTile(
-                  leading: const Icon(Icons.lock_outline_rounded, color: Color(0xFF194432)),
-                  title: const Text('Ubah Password', style: TextStyle(fontWeight: FontWeight.w600)),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                  leading: const Icon(
+                    Icons.lock_outline_rounded,
+                    color: Color(0xFF194432),
+                  ),
+                  title: const Text(
+                    'Ubah Password',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  trailing: const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 16,
+                  ),
                   onTap: () {
                     Navigator.pop(context);
 
@@ -727,8 +778,17 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                 const Divider(),
 
                 ListTile(
-                  leading: const Icon(Icons.logout_rounded, color: Colors.orange),
-                  title: const Text('Keluar (Logout)', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.orange)),
+                  leading: const Icon(
+                    Icons.logout_rounded,
+                    color: Colors.orange,
+                  ),
+                  title: const Text(
+                    'Keluar (Logout)',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.orange,
+                    ),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _showConfirmLogoutDialog(context);
@@ -737,8 +797,17 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                 const Divider(),
 
                 ListTile(
-                  leading: const Icon(Icons.delete_forever_rounded, color: Colors.red),
-                  title: const Text('Hapus Akun Permanen', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red)),
+                  leading: const Icon(
+                    Icons.delete_forever_rounded,
+                    color: Colors.red,
+                  ),
+                  title: const Text(
+                    'Hapus Akun Permanen',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.red,
+                    ),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _showConfirmDeleteAccountDialog(context);
@@ -769,15 +838,22 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               Navigator.pop(context);
               Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const RoleSelectionScreen(),
+                ),
                 (route) => false,
               );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF194432),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: const Text('Ya, Keluar', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Ya, Keluar',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -789,8 +865,13 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Hapus Akun', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-        content: const Text('Tindakan ini tidak dapat dibatalkan. Seluruh data presensi Anda akan dihapus permanen.'),
+        title: const Text(
+          'Hapus Akun',
+          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Tindakan ini tidak dapat dibatalkan. Seluruh data presensi Anda akan dihapus permanen.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -801,15 +882,22 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               Navigator.pop(context);
               Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const RoleSelectionScreen(),
+                ),
                 (route) => false,
               );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: const Text('Hapus Akun', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Hapus Akun',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -827,11 +915,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
         borderRadius: BorderRadius.circular(30),
         border: Border.all(color: Colors.grey.shade300, width: 1.5),
         boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
       child: Material(
@@ -961,7 +1045,11 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
     );
   }
 
-  Widget _buildAppBarLogo(String assetPath, IconData fallbackIcon, Color fallbackColor) {
+  Widget _buildAppBarLogo(
+    String assetPath,
+    IconData fallbackIcon,
+    Color fallbackColor,
+  ) {
     return Container(
       width: 30,
       height: 30,
@@ -1039,10 +1127,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               const SizedBox(height: 2),
               Text(
                 _guruJenis,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.black54,
-                ),
+                style: const TextStyle(fontSize: 14, color: Colors.black54),
               ),
             ],
           ),
@@ -1051,7 +1136,6 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
     );
   }
 
-  
   Widget _buildDateTimeBanner() {
     const namaHari = [
       'Minggu',
@@ -1088,10 +1172,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
     final detik = _waktuSekarang.second.toString().padLeft(2, '0');
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 12,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF16B555),
         borderRadius: BorderRadius.circular(16),
@@ -1129,17 +1210,11 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
     final isTerikat = _deviceStatus == 'Terikat' || _deviceStatus == 'Aktif';
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 12,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFF52C488),
-          width: 1.2,
-        ),
+        border: Border.all(color: const Color(0xFF52C488), width: 1.2),
       ),
       child: Row(
         children: [
@@ -1161,9 +1236,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _isLoadingDevice
-                      ? 'Memuat perangkat...'
-                      : _deviceNama,
+                  _isLoadingDevice ? 'Memuat perangkat...' : _deviceNama,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
@@ -1176,10 +1249,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                   _isLoadingDevice
                       ? 'Memeriksa status perangkat'
                       : 'Status: $_deviceStatus',
-                  style: const TextStyle(
-                    color: Colors.black45,
-                    fontSize: 11,
-                  ),
+                  style: const TextStyle(color: Colors.black45, fontSize: 11),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -1189,13 +1259,13 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
             _isLoadingDevice
                 ? Icons.hourglass_empty
                 : isTerikat
-                    ? Icons.check_circle_rounded
-                    : Icons.error_outline_rounded,
+                ? Icons.check_circle_rounded
+                : Icons.error_outline_rounded,
             color: _isLoadingDevice
                 ? Colors.grey
                 : isTerikat
-                    ? const Color(0xFF52C488)
-                    : Colors.orange,
+                ? const Color(0xFF52C488)
+                : Colors.orange,
             size: 22,
           ),
         ],
@@ -1203,21 +1273,18 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
     );
   }
 
-  // 5. WIDGET KARTU PETA LOKASI 
+  // 5. WIDGET KARTU PETA LOKASI
   Widget _buildLocationMapCard() {
     final bool lokasiTersedia =
-        _latitudeSekolah != null &&
-        _longitudeSekolah != null;
+        _latitudeSekolah != null && _longitudeSekolah != null;
 
-    final bool gpsTersedia =
-        _latitudeGuru != null &&
-        _longitudeGuru != null;
+    final bool gpsTersedia = _latitudeGuru != null && _longitudeGuru != null;
 
     final Color statusColor = _isLoadingLokasi
         ? Colors.orange
         : _dalamRadius
-            ? const Color(0xFF52C488)
-            : Colors.red;
+        ? const Color(0xFF52C488)
+        : Colors.red;
 
     final LatLng? posisiSekolah = lokasiTersedia
         ? LatLng(_latitudeSekolah!, _longitudeSekolah!)
@@ -1232,19 +1299,13 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFF52C488),
-          width: 1.2,
-        ),
+        border: Border.all(color: const Color(0xFF52C488), width: 1.2),
       ),
       child: Column(
         children: [
           // STATUS LOKASI
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 8,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFFE8F7EE),
               borderRadius: BorderRadius.circular(12),
@@ -1259,9 +1320,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _isLoadingLokasi
-                        ? 'MEMERIKSA LOKASI...'
-                        : _statusLokasi,
+                    _isLoadingLokasi ? 'MEMERIKSA LOKASI...' : _statusLokasi,
                     style: TextStyle(
                       color: statusColor,
                       fontWeight: FontWeight.bold,
@@ -1275,9 +1334,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                   const SizedBox(
                     height: 18,
                     width: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                    ),
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 else
                   Row(
@@ -1292,9 +1349,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                       ),
                       const SizedBox(width: 8),
                       InkWell(
-                        onTap: _isLoadingLokasi
-                            ? null
-                            : _ambilLokasiGuru,
+                        onTap: _isLoadingLokasi ? null : _ambilLokasiGuru,
                         borderRadius: BorderRadius.circular(20),
                         child: const Padding(
                           padding: EdgeInsets.all(4),
@@ -1320,22 +1375,18 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               height: 200,
               width: double.infinity,
               child: posisiSekolah == null
-                  ? const Center(
-                      child: Text(
-                        'Lokasi sekolah belum tersedia',
-                      ),
-                    )
+                  ? const Center(child: Text('Lokasi sekolah belum tersedia'))
                   : FlutterMap(
                       options: MapOptions(
-                          initialCenter: posisiSekolah,
-                          initialZoom: 16,
-                          minZoom: 5,
-                          maxZoom: 19,
-                          onMapReady: () {
-                            debugPrint('MAP BERHASIL DIINISIALISASI');
-                          },
-                        ),
-                      children: [    
+                        initialCenter: posisiSekolah,
+                        initialZoom: 16,
+                        minZoom: 5,
+                        maxZoom: 19,
+                        onMapReady: () {
+                          debugPrint('MAP BERHASIL DIINISIALISASI');
+                        },
+                      ),
+                      children: [
                         TileLayer(
                           urlTemplate:
                               'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -1354,8 +1405,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                               radius: _radiusSekolah.toDouble(),
                               useRadiusInMeter: true,
                               color: const Color(0x3352C488),
-                              borderColor:
-                                  const Color(0xFF16B555),
+                              borderColor: const Color(0xFF16B555),
                               borderStrokeWidth: 2,
                             ),
                           ],
@@ -1390,9 +1440,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
 
                         const RichAttributionWidget(
                           attributions: [
-                            TextSourceAttribution(
-                              'OpenStreetMap contributors',
-                            ),
+                            TextSourceAttribution('OpenStreetMap contributors'),
                           ],
                         ),
                       ],
@@ -1406,11 +1454,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.social_distance_rounded,
-                color: statusColor,
-                size: 16,
-              ),
+              Icon(Icons.social_distance_rounded, color: statusColor, size: 16),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -1430,10 +1474,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
 
           Text(
             'Radius presensi: $_radiusSekolah meter',
-            style: const TextStyle(
-              color: Colors.black54,
-              fontSize: 11,
-            ),
+            style: const TextStyle(color: Colors.black54, fontSize: 11),
           ),
         ],
       ),
@@ -1453,7 +1494,11 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.camera_alt_outlined, color: Colors.grey.shade700, size: 20),
+              Icon(
+                Icons.camera_alt_outlined,
+                color: Colors.grey.shade700,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               const Text(
                 'Bukti Foto Presensi',
@@ -1471,31 +1516,31 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
                 child: _fotoBukti != null
-                  ? Image.file(
-                      _fotoBukti!,
-                      height: 220,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    )
-                  : Image.asset(
-                      'assets/images/guru_photo1.png',
-                      height: 220,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          height: 220,
-                          color: Colors.grey.shade300,
-                          child: const Center(
-                            child: Icon(
-                              Icons.person,
-                              size: 60,
-                              color: Colors.grey,
+                    ? Image.file(
+                        _fotoBukti!,
+                        height: 220,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      )
+                    : Image.asset(
+                        'assets/images/guru_photo1.png',
+                        height: 220,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 220,
+                            color: Colors.grey.shade300,
+                            child: const Center(
+                              child: Icon(
+                                Icons.person,
+                                size: 60,
+                                color: Colors.grey,
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      ),
               ),
               Positioned(
                 top: 10,
@@ -1505,8 +1550,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                     final hasilFoto = await Navigator.push<File>(
                       context,
                       MaterialPageRoute(
-                        builder: (context) =>
-                            const PresensiCameraScreen(),
+                        builder: (context) => const PresensiCameraScreen(),
                       ),
                     );
 
@@ -1516,16 +1560,10 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                       });
                     }
                   },
-                  icon: const Icon(
-                    Icons.camera_alt_rounded,
-                    size: 13,
-                  ),
+                  icon: const Icon(Icons.camera_alt_rounded, size: 13),
                   label: const Text(
                     'Ambil Ulang',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xE635775B),
@@ -1577,9 +1615,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                 try {
                   final service = PresensiService();
 
-                  final hasil = await service.kirimPresensi(
-                    foto: _fotoBukti!,
-                  );
+                  final hasil = await service.kirimPresensi(foto: _fotoBukti!);
 
                   if (!mounted) return;
 
@@ -1597,12 +1633,8 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                   );
 
                   if (hasil['success'] == true) {
-                    debugPrint(
-                      'PRESENSI BERHASIL: ${hasil['foto_bukti']}',
-                    );
-                    debugPrint(
-                      'JARAK SEKOLAH: ${hasil['jarak']} meter',
-                    );
+                    debugPrint('PRESENSI BERHASIL: ${hasil['foto_bukti']}');
+                    debugPrint('JARAK SEKOLAH: ${hasil['jarak']} meter');
                   }
                 } catch (e) {
                   if (!mounted) return;
@@ -1632,13 +1664,8 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
               )
             : const Icon(Icons.send_rounded, size: 20),
         label: Text(
-          _isSubmittingPresensi
-              ? 'Mengirim Presensi...'
-              : 'Kirim Absen',
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-          ),
+          _isSubmittingPresensi ? 'Mengirim Presensi...' : 'Kirim Absen',
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF35775B),
@@ -1657,14 +1684,28 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
 
   Widget _buildHistorySection() {
     const namaHari = [
-      'Minggu', 'Senin', 'Selasa', 'Rabu',
-      'Kamis', 'Jumat', 'Sabtu'
+      'Minggu',
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
     ];
 
     const namaBulan = [
-      'Januari', 'Februari', 'Maret', 'April',
-      'Mei', 'Juni', 'Juli', 'Agustus',
-      'September', 'Oktober', 'November', 'Desember'
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
     ];
 
     String formatTanggal(String tanggal) {
@@ -1692,10 +1733,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
             gradient: const LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFFE5ECE8),
-                Color(0xFFA0AAA4),
-              ],
+              colors: [Color(0xFFE5ECE8), Color(0xFFA0AAA4)],
             ),
             borderRadius: BorderRadius.circular(20),
           ),
@@ -1707,90 +1745,79 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                   ),
                 )
               : _historyData.isEmpty
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text('Belum ada riwayat presensi.'),
-                      ),
-                    )
-                  : Column(
-                      children: List.generate(
-                        _historyData.length,
-                        (index) {
-                          final item = _historyData[index];
-                          final isLast =
-                              index == _historyData.length - 1;
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('Belum ada riwayat presensi.'),
+                  ),
+                )
+              : Column(
+                  children: List.generate(_historyData.length, (index) {
+                    final item = _historyData[index];
+                    final isLast = index == _historyData.length - 1;
 
-                          return Column(
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 6,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            formatTanggal(
-                                              item['tanggal'].toString(),
-                                            ),
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.black87,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.exit_to_app_rounded,
-                                                color: Color(0xFF16B555),
-                                                size: 14,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                item['status']?.toString() ??
-                                                    'Hadir',
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.black87,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
                                     Text(
-                                      item['jam']?.toString() ?? '-',
+                                      formatTanggal(item['tanggal'].toString()),
                                       style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
                                         color: Colors.black87,
                                       ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.exit_to_app_rounded,
+                                          color: Color(0xFF16B555),
+                                          size: 14,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          item['status']?.toString() ?? 'Hadir',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.black87,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
                               ),
-                              if (!isLast)
-                                const Divider(
-                                  color: Colors.black12,
-                                  height: 12,
-                                  thickness: 0.8,
+                              Text(
+                                item['jam']?.toString() ?? '-',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.black87,
                                 ),
+                              ),
                             ],
-                          );
-                        },
-                      ),
-                    ),
+                          ),
+                        ),
+                        if (!isLast)
+                          const Divider(
+                            color: Colors.black12,
+                            height: 12,
+                            thickness: 0.8,
+                          ),
+                      ],
+                    );
+                  }),
+                ),
         ),
       ],
     );
@@ -1811,10 +1838,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
           decoration: BoxDecoration(
             color: const Color(0xFFF8FAF8),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: const Color(0xFF25D366),
-              width: 2,
-            ),
+            border: Border.all(color: const Color(0xFF25D366), width: 2),
             boxShadow: const [
               BoxShadow(
                 color: Colors.black12,
@@ -1826,11 +1850,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 48,
-                color: Colors.black,
-              ),
+              Icon(icon, size: 48, color: Colors.black),
               const SizedBox(height: 10),
               Text(
                 title,
