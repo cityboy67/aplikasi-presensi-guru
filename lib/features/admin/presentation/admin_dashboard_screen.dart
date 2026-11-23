@@ -45,7 +45,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             'guru_id, nama, niy, email, no_telepon, '
             'guru_jenis, status, foto_url, user_id',
           )
-          .order('nama');
+          .order('nama', ascending: true);
 
       final List<Map<String, dynamic>> loadedTeachers = [];
 
@@ -246,43 +246,46 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   // ── Dashboard utama (Data Guru) ──────────────────────────────
   Widget _buildDashboardContent(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 40),
-      child: Column(
-        children: [
-          const SizedBox(height: 40),
-          _buildSearchBar(),
-          const SizedBox(height: 38),
+    return Column(
+      children: [
+        const SizedBox(height: 24),
+        _buildSearchBar(),
 
-          if (_isLoadingTeachers)
-            const Padding(
-              padding: EdgeInsets.all(40),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (filteredTeachers.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(40),
-              child: Center(child: Text('Data guru tidak ditemukan.')),
-            )
-          else
-            ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: filteredTeachers.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 20),
-              itemBuilder: (_, index) {
-                final teacher = filteredTeachers[index];
+        const SizedBox(height: 24),
+        _buildAddTeacherButton(context),
 
-                return _buildTeacherCard(teacher, teachers.indexOf(teacher));
-              },
-            ),
+        const SizedBox(height: 24),
 
-          const SizedBox(height: 48),
-          _buildAddTeacherButton(context),
-          const SizedBox(height: 36),
-        ],
-      ),
+        Expanded(
+          child: _isLoadingTeachers
+              ? const Center(
+                  child: CircularProgressIndicator(),
+                )
+              : filteredTeachers.isEmpty
+                  ? const Center(
+                      child: Text('Data guru tidak ditemukan.'),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      itemCount: filteredTeachers.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(height: 20),
+                      itemBuilder: (_, index) {
+                        final teacher = filteredTeachers[index];
+
+                        return _buildTeacherCard(
+                          teacher,
+                          teachers.indexOf(teacher),
+                        );
+                      },
+                    ),
+        ),
+
+        const SizedBox(height: 20),
+      ],
     );
   }
 
@@ -469,7 +472,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   // ── 3. CARD DATA GURU ────────────────────────────────────────
-
   Widget _buildTeacherCard(Map<String, dynamic> data, int index) {
     return Container(
       decoration: BoxDecoration(

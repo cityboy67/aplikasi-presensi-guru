@@ -795,24 +795,6 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                   },
                 ),
                 const Divider(),
-
-                ListTile(
-                  leading: const Icon(
-                    Icons.delete_forever_rounded,
-                    color: Colors.red,
-                  ),
-                  title: const Text(
-                    'Hapus Akun Permanen',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.red,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showConfirmDeleteAccountDialog(context);
-                  },
-                ),
               ],
             ),
           ),
@@ -852,50 +834,6 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
             ),
             child: const Text(
               'Ya, Keluar',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showConfirmDeleteAccountDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Hapus Akun',
-          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Tindakan ini tidak dapat dibatalkan. Seluruh data presensi Anda akan dihapus permanen.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const RoleSelectionScreen(),
-                ),
-                (route) => false,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text(
-              'Hapus Akun',
               style: TextStyle(color: Colors.white),
             ),
           ),

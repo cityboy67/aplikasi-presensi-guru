@@ -115,7 +115,7 @@ class _DetailPresensiAdminScreenState extends State<DetailPresensiAdminScreen> {
         _supabase
             .from('guru')
             .select('guru_id, nama, niy, guru_jenis, status, foto_url')
-            .order('nama'),
+            .order('nama', ascending: true),
         _supabase
             .from('presensi')
             .select(

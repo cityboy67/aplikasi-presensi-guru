@@ -398,68 +398,11 @@ class _LoginGuruScreenState extends State<LoginGuruScreen> {
                                 ),
                               ),
                           ),
-                          const SizedBox(height: 24),
-
-                          // Divider "Sign in with"
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Divider(
-                                  color: Colors.grey.shade300,
-                                  thickness: 1,
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                                child: Text(
-                                  'Sign in with',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade500,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Divider(
-                                  color: Colors.grey.shade300,
-                                  thickness: 1,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Google Sign In
-                          Center(
-                            child: InkWell(
-                              onTap: () {},
-                              borderRadius: BorderRadius.circular(24),
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.grey.shade200),
-                                ),
-                                child: Image.asset(
-                                  'assets/images/ic_google.png',
-                                  width: 26,
-                                  height: 26,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Icon(
-                                      Icons.g_mobiledata_rounded,
-                                      color: Colors.red,
-                                      size: 32,
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 176),
 
                           // Footer Logo
                           _buildCollaborationSection(),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 14),
                         ],
                       ),
                     ),

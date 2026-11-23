@@ -110,7 +110,7 @@ class _RekapPresensiScreenState extends State<RekapPresensiScreen> {
       final teachersResult = await _supabase
           .from('guru')
           .select('guru_id, nama, niy, guru_jenis, status, foto_url')
-          .order('nama');
+          .order('nama', ascending: true);
 
       final attendanceResult = await _supabase
           .from('presensi')
