@@ -173,7 +173,7 @@ class _PengajuanAdminScreenState extends State<PengajuanAdminScreen> {
       final uri = Uri.parse(signedUrl);
       final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!opened) {
-        _showMessage('Dokumen tidak dapat dibuka. Periksa aplikasi pembuka PDF.');
+        _showMessage('Dokumen tidak dapat dibuka. Periksa aplikasi pembuka File.');
       }
     } catch (e) {
       _showMessage('Gagal membuka dokumen: $e');
@@ -411,7 +411,7 @@ class _PengajuanAdminScreenState extends State<PengajuanAdminScreen> {
                                     ),
                                     SizedBox(height: 2),
                                     Text(
-                                      'Periksa dokumen PDF pengajuan',
+                                      'Periksa dokumen pengajuan',
                                       style: TextStyle(
                                         fontSize: 9,
                                         color: Color(0xFF89928D),
@@ -430,7 +430,7 @@ class _PengajuanAdminScreenState extends State<PengajuanAdminScreen> {
                                   ),
                                 ),
                                 child: const Text(
-                                  'Buka PDF',
+                                  'Buka File',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w700,
@@ -887,7 +887,7 @@ class _PengajuanAdminScreenState extends State<PengajuanAdminScreen> {
                                   ),
                                   SizedBox(height: 2),
                                   Text(
-                                    'Buka file PDF pengajuan',
+                                    'Buka file pengajuan',
                                     style: TextStyle(
                                       fontSize: 9,
                                       color: Color(0xFF89928D),
@@ -906,7 +906,7 @@ class _PengajuanAdminScreenState extends State<PengajuanAdminScreen> {
                                 ),
                               ),
                               child: const Text(
-                                'Buka PDF',
+                                'Buka File',
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,

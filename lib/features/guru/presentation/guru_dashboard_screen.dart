@@ -72,6 +72,10 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
   List<Map<String, dynamic>> _historyData = [];
   bool _isLoadingHistory = true;
 
+  // History pengajuan izin/sakit
+  List<Map<String, dynamic>> _historyPengajuan = [];
+  bool _isLoadingHistoryPengajuan = true;
+
   // Location information
   @override
   void initState() {
@@ -79,6 +83,7 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
 
     _loadGuruProfile();
     _loadLokasiSekolah();
+    _loadHistoryPengajuan();
 
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
@@ -343,6 +348,82 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
     }
   }
 
+  // Load history pengajuan izin/sakit for the guru
+  Future<void> _loadHistoryPengajuan() async {
+    if (_guruId == null) return;
+
+    setState(() {
+      _isLoadingHistoryPengajuan = true;
+    });
+
+    try {
+      final izinData = await Supabase.instance.client
+          .from('pengajuan_izin')
+          .select(
+            'tanggal_mulai, kategori, alasan, status, lampiran_url, catatan_admin',
+          )
+          .eq('guru_id', _guruId!)
+          .order('tanggal_mulai', ascending: false);
+
+      final sakitData = await Supabase.instance.client
+          .from('pengajuan_sakit')
+          .select(
+            'tanggal_sakit, diagnosa, status_perawatan, status, lampiran_url, catatan_admin',
+          )
+          .eq('guru_id', _guruId!)
+          .order('tanggal_sakit', ascending: false);
+
+      final List<Map<String, dynamic>> dataGabungan = [];
+
+      for (final item in izinData) {
+        dataGabungan.add({
+          'jenis': 'Izin',
+          'tanggal': item['tanggal_mulai'],
+          'keterangan': item['alasan'] ?? '-',
+          'kategori': item['kategori'] ?? '-',
+          'status': item['status'] ?? 'Menunggu',
+          'lampiran_url': item['lampiran_url'],
+          'catatan_admin': item['catatan_admin'] ?? '-',
+        });
+      }
+
+      for (final item in sakitData) {
+        dataGabungan.add({
+          'jenis': 'Sakit',
+          'tanggal': item['tanggal_sakit'],
+          'keterangan': item['diagnosa'] ?? '-',
+          'kategori': item['status_perawatan'] ?? '-',
+          'status': item['status'] ?? 'Menunggu',
+          'lampiran_url': item['lampiran_url'],
+          'catatan_admin': item['catatan_admin'] ?? '-',
+        });
+      }
+
+      // Urutkan seluruh pengajuan berdasarkan tanggal terbaru
+      dataGabungan.sort((a, b) {
+        final tanggalA = DateTime.parse(a['tanggal'].toString());
+        final tanggalB = DateTime.parse(b['tanggal'].toString());
+
+        return tanggalB.compareTo(tanggalA);
+      });
+
+      if (!mounted) return;
+
+      setState(() {
+        _historyPengajuan = dataGabungan;
+        _isLoadingHistoryPengajuan = false;
+      });
+    } catch (e) {
+      debugPrint('Gagal mengambil riwayat pengajuan: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingHistoryPengajuan = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -557,40 +638,57 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                           horizontal: 20.0,
                           vertical: 40.0,
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Expanded(
-                              child: _buildPermitOptionCard(
-                                title: 'Izin',
-                                icon: Icons.groups_rounded,
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const PengajuanIzinScreen(),
-                                    ),
-                                  );
-                                },
-                              ),
+                            // Tombol pilihan Izin dan Sakit
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Expanded(
+                                  child: _buildPermitOptionCard(
+                                    title: 'Izin',
+                                    icon: Icons.groups_rounded,
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const PengajuanIzinScreen(),
+                                        ),
+                                      ).then((_) {
+                                        _loadHistoryPengajuan();
+                                      });
+                                    },
+                                  ),
+                                ),
+
+                                const SizedBox(width: 16),
+
+                                Expanded(
+                                  child: _buildPermitOptionCard(
+                                    title: 'Sakit',
+                                    icon: Icons.add_box_rounded,
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const PengajuanSakitScreen(),
+                                        ),
+                                      ).then((_) {
+                                        _loadHistoryPengajuan();
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: _buildPermitOptionCard(
-                                title: 'Sakit',
-                                icon: Icons.add_box_rounded,
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const PengajuanSakitScreen(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
+
+                            const SizedBox(height: 24),
+
+                            // Riwayat pengajuan di bawah tombol
+                            _buildRiwayatPengajuan(),
                           ],
                         ),
                       ),
@@ -1756,6 +1854,180 @@ class _GuruDashboardScreenState extends State<GuruDashboardScreen> {
                     );
                   }),
                 ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRiwayatPengajuan() {
+    const namaBulan = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+
+    String formatTanggal(String tanggal) {
+      final date = DateTime.parse(tanggal);
+
+      return '${date.day} ${namaBulan[date.month - 1]} ${date.year}';
+    }
+
+    Color warnaStatus(String status) {
+      switch (status.toLowerCase()) {
+        case 'disetujui':
+          return const Color(0xFF16B555);
+        case 'ditolak':
+          return Colors.red;
+        default:
+          return Colors.orange;
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Riwayat Pengajuan',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFFE5ECE8),
+                Color(0xFFA0AAA4),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: _isLoadingHistoryPengajuan
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              : _historyPengajuan.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Belum ada riwayat pengajuan.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    )
+                  : Column(
+                      children: List.generate(
+                        _historyPengajuan.length,
+                        (index) {
+                          final item = _historyPengajuan[index];
+                          final isLast =
+                              index == _historyPengajuan.length - 1;
+
+                          final status =
+                              item['status']?.toString() ?? 'Menunggu';
+
+                          return Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            formatTanggal(
+                                              item['tanggal'].toString(),
+                                            ),
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight:
+                                                  FontWeight.w600,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+
+                                          const SizedBox(height: 4),
+
+                                          Text(
+                                            '${item['jenis']} - ${item['kategori']}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+
+                                          const SizedBox(height: 3),
+
+                                          Text(
+                                            'Catatan Admin: ${item['catatan_admin']?.toString().trim().isNotEmpty == true ? item['catatan_admin'] : '-'}',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.black54,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    const SizedBox(width: 8),
+
+                                    Text(
+                                      status,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: warnaStatus(status),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              if (!isLast)
+                                const Divider(
+                                  color: Colors.black12,
+                                  height: 12,
+                                  thickness: 0.8,
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
         ),
       ],
     );

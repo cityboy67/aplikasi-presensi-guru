@@ -41,15 +41,19 @@ class _PengajuanIzinScreenState extends State<PengajuanIzinScreen> {
     try {
       final result = await fp.FilePicker.pickFiles(
         type: fp.FileType.custom,
-        allowedExtensions: ['pdf'],
+        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
       );
 
-      // Pada file_picker v12+, hasilnya List<PlatformFile>.
       if (result.isEmpty) return;
 
       final pickedFile = result.single;
-      if (!pickedFile.name.toLowerCase().endsWith('.pdf')) {
-        _showMessage('Format dokumen harus PDF.');
+      final fileName = pickedFile.name;
+      final extension = fileName.split('.').last.toLowerCase();
+
+      const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+
+      if (!allowedExtensions.contains(extension)) {
+        _showMessage('Format file harus PDF, JPG, JPEG, atau PNG.');
         return;
       }
 
@@ -57,18 +61,18 @@ class _PengajuanIzinScreenState extends State<PengajuanIzinScreen> {
       final fileSize = bytes.length;
 
       if (fileSize > 10 * 1024 * 1024) {
-        _showMessage('Ukuran PDF maksimal 10 MB.');
+        _showMessage('Ukuran file maksimal 10 MB.');
         return;
       }
 
       setState(() {
         _selectedPdfBytes = bytes;
-        _uploadedFileName = pickedFile.name;
+        _uploadedFileName = fileName;
         _uploadedFileSize =
             '${(fileSize / (1024 * 1024)).toStringAsFixed(2)} MB';
       });
     } catch (e) {
-      _showMessage('Gagal memilih dokumen: $e');
+      _showMessage('Gagal memilih file: $e');
     }
   }
 
@@ -103,7 +107,7 @@ class _PengajuanIzinScreenState extends State<PengajuanIzinScreen> {
     }
 
     if (_selectedPdfBytes == null) {
-      _showMessage('Silakan pilih dokumen pendukung dalam format PDF.');
+      _showMessage('Silakan pilih dokumen pendukung.');
       return;
     }
 
@@ -133,23 +137,75 @@ class _PengajuanIzinScreenState extends State<PengajuanIzinScreen> {
       }
 
       final guruId = guru['guru_id'].toString();
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.pdf';
+
+      // Format tanggal izin yang dipilih
+      final tanggalIzin = _formatDate(_selectedDate);
+
+      // ========================================
+      // VALIDASI PENGAJUAN IZIN PADA TANGGAL SAMA
+      // ========================================
+
+      // Cek apakah Guru sudah memiliki pengajuan izin
+      // yang mencakup tanggal yang dipilih.
+      final pengajuanIzin = await _supabase
+          .from('pengajuan_izin')
+          .select('guru_id')
+          .eq('guru_id', guruId)
+          .lte('tanggal_mulai', tanggalIzin)
+          .gte('tanggal_selesai', tanggalIzin);
+
+      // Cek apakah Guru sudah memiliki pengajuan sakit
+      // pada tanggal yang dipilih.
+      final pengajuanSakit = await _supabase
+          .from('pengajuan_sakit')
+          .select('guru_id')
+          .eq('guru_id', guruId)
+          .eq('tanggal_sakit', tanggalIzin);
+
+      // Jika sudah ada pengajuan, hentikan proses.
+      if (pengajuanIzin.isNotEmpty ||
+          pengajuanSakit.isNotEmpty) {
+        _showMessage(
+          'Anda sudah memiliki pengajuan pada tanggal '
+          '$tanggalIzin. Silakan periksa riwayat pengajuan.',
+        );
+        return;
+      }
+
+      // ========================================
+      // LANJUTKAN PROSES UPLOAD DOKUMEN
+      // ========================================
+
+      final extension = _uploadedFileName!
+          .split('.')
+          .last
+          .toLowerCase();
+
+      final fileName =
+        '${DateTime.now().millisecondsSinceEpoch}.$extension';
       uploadedPath = '$guruId/izin/$fileName';
 
-      await _supabase.storage.from('dokumen-pengajuan').uploadBinary(
-            uploadedPath,
-            _selectedPdfBytes!,
-            fileOptions: const FileOptions(
-              contentType: 'application/pdf',
-              upsert: false,
-            ),
-          );
+      final contentType = switch (extension) {
+        'pdf' => 'application/pdf',
+        'jpg' || 'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        _ => 'application/octet-stream',
+      };
 
+      await _supabase.storage.from('dokumen-pengajuan').uploadBinary(
+        uploadedPath,
+        _selectedPdfBytes!,
+        fileOptions: FileOptions(
+          contentType: contentType,
+          upsert: false,
+        ),
+      );
+      
       await _supabase.from('pengajuan_izin').insert({
         'guru_id': guruId,
         'jenis': 'Izin',
-        'tanggal_mulai': _formatDate(_selectedDate),
-        'tanggal_selesai': _formatDate(_selectedDate),
+        'tanggal_mulai': tanggalIzin,
+        'tanggal_selesai': tanggalIzin,
         'alasan': _keteranganController.text.trim(),
         'lampiran_url': uploadedPath,
         'status': 'Menunggu',
@@ -514,7 +570,8 @@ class _PengajuanIzinScreenState extends State<PengajuanIzinScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Surat undangan dinas, disposisi, atau surat keterangan (PDF maks 10MB)',
+                        'Surat undangan dinas, disposisi, atau surat keterangan '
+                        '(PDF, JPG, JPEG, PNG maks 10MB)',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade600,
@@ -538,9 +595,12 @@ class _PengajuanIzinScreenState extends State<PengajuanIzinScreen> {
                                   color: const Color(0xFFE53935),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Text(
-                                  'PDF',
-                                  style: TextStyle(
+                                child: Text(
+                                  _uploadedFileName!
+                                      .split('.')
+                                      .last
+                                      .toUpperCase(),
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 11,

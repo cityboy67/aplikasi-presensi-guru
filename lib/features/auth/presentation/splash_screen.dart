@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'role_selection_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../guru/presentation/guru_dashboard_screen.dart';
+import '../../admin/presentation/admin_dashboard_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -36,14 +39,82 @@ class _SplashScreenState extends State<SplashScreen>
     _controller.forward();
 
     // Berpindah Otomatis ke Halaman Role Selection
+    // Cek sesi login setelah animasi splash selesai
     Future.delayed(const Duration(milliseconds: 3500), () {
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
-        );
+        _checkLoginSession();
       }
     });
+  }
+
+  Future<void> _checkLoginSession() async {
+    final supabase = Supabase.instance.client;
+    final session = supabase.auth.currentSession;
+
+    // Jika belum login atau sesi tidak tersedia
+    if (session == null) {
+      _goToRoleSelection();
+      return;
+    }
+
+    final userId = session.user.id;
+
+    try {
+      // Periksa apakah akun terdaftar sebagai Admin
+      final adminData = await supabase
+          .from('admin')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (adminData != null) {
+        // Ganti AdminDashboardScreen dengan nama class dashboard Admin milikmu
+        _goToDashboard(
+          const AdminDashboardScreen(),
+        );
+        return;
+      }
+
+      // Periksa apakah akun terdaftar sebagai Guru
+      final guruData = await supabase
+          .from('guru')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (guruData != null) {
+        _goToDashboard(
+          const GuruDashboardScreen(),
+        );
+        return;
+      }
+
+      // Jika sesi ada tetapi role tidak ditemukan
+      _goToRoleSelection();
+    } catch (e) {
+      debugPrint('Gagal memeriksa sesi login: $e');
+
+      // Jika terjadi error, arahkan ke pemilihan role
+      _goToRoleSelection();
+    }
+  }
+
+  void _goToRoleSelection() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const RoleSelectionScreen(),
+      ),
+    );
+  }
+
+  void _goToDashboard(Widget dashboard) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => dashboard,
+      ),
+    );
   }
 
   @override

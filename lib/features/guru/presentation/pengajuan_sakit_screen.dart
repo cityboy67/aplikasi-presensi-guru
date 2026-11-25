@@ -27,36 +27,41 @@ class _PengajuanSakitScreenState extends State<PengajuanSakitScreen> {
     super.dispose();
   }
 
-
   Future<void> _pickPdf() async {
     try {
       final result = await fp.FilePicker.pickFiles(
         type: fp.FileType.custom,
-        allowedExtensions: ['pdf'],
+        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
       );
 
       if (result.isEmpty) return;
 
       final pickedFile = result.single;
-      if (!pickedFile.name.toLowerCase().endsWith('.pdf')) {
-        _showMessage('Format dokumen harus PDF.');
+      final fileName = pickedFile.name;
+      final extension = fileName.split('.').last.toLowerCase();
+
+      const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+
+      if (!allowedExtensions.contains(extension)) {
+        _showMessage('Format file harus PDF, JPG, JPEG, atau PNG.');
         return;
       }
 
       final bytes = await pickedFile.readAsBytes();
+
       if (bytes.length > 10 * 1024 * 1024) {
-        _showMessage('Ukuran PDF maksimal 10 MB.');
+        _showMessage('Ukuran file maksimal 10 MB.');
         return;
       }
 
       setState(() {
         _selectedPdfBytes = bytes;
-        _uploadedFileName = pickedFile.name;
+        _uploadedFileName = fileName;
         _uploadedFileSize =
             '${(bytes.length / (1024 * 1024)).toStringAsFixed(2)} MB';
       });
     } catch (e) {
-      _showMessage('Gagal memilih dokumen: $e');
+      _showMessage('Gagal memilih file: $e');
     }
   }
 
@@ -85,7 +90,7 @@ class _PengajuanSakitScreenState extends State<PengajuanSakitScreen> {
       return;
     }
     if (_selectedPdfBytes == null) {
-      _showMessage('Silakan pilih surat dokter dalam format PDF.');
+      _showMessage('Silakan pilih surat dokter sebagai lampiran.');
       return;
     }
 
@@ -113,21 +118,71 @@ class _PengajuanSakitScreenState extends State<PengajuanSakitScreen> {
       }
 
       final guruId = guru['guru_id'].toString();
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.pdf';
+
+      // Format tanggal yang dipilih
+      final tanggalSakit = _formatDate(_selectedDate);
+
+      // ========================================
+      // VALIDASI PENGAJUAN SAKIT PADA TANGGAL SAMA
+      // ========================================
+
+      // Cek apakah Guru sudah mengajukan sakit
+      // pada tanggal yang sama.
+      final pengajuanSakit = await _supabase
+          .from('pengajuan_sakit')
+          .select('guru_id')
+          .eq('guru_id', guruId)
+          .eq('tanggal_sakit', tanggalSakit);
+
+      // Cek apakah Guru sudah memiliki pengajuan izin
+      // yang mencakup tanggal sakit tersebut.
+      final pengajuanIzin = await _supabase
+          .from('pengajuan_izin')
+          .select('guru_id')
+          .eq('guru_id', guruId)
+          .lte('tanggal_mulai', tanggalSakit)
+          .gte('tanggal_selesai', tanggalSakit);
+
+      // Jika salah satu ditemukan, hentikan pengajuan.
+      if (pengajuanSakit.isNotEmpty ||
+          pengajuanIzin.isNotEmpty) {
+        _showMessage(
+          'Anda sudah memiliki pengajuan pada tanggal '
+          '$tanggalSakit. Silakan periksa riwayat pengajuan.',
+        );
+        return;
+      }
+
+      final extension = _uploadedFileName!
+          .split('.')
+          .last
+          .toLowerCase();
+
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}.$extension';
+
+      uploadedPath = '$guruId/sakit/$fileName';
       uploadedPath = '$guruId/sakit/$fileName';
 
+      final contentType = switch (extension) {
+        'pdf' => 'application/pdf',
+        'jpg' || 'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        _ => 'application/octet-stream',
+      };
+
       await _supabase.storage.from('dokumen-pengajuan').uploadBinary(
-            uploadedPath,
-            _selectedPdfBytes!,
-            fileOptions: const FileOptions(
-              contentType: 'application/pdf',
-              upsert: false,
-            ),
-          );
+        uploadedPath,
+        _selectedPdfBytes!,
+        fileOptions: FileOptions(
+          contentType: contentType,
+          upsert: false,
+        ),
+      );
 
       await _supabase.from('pengajuan_sakit').insert({
         'guru_id': guruId,
-        'tanggal_sakit': _formatDate(_selectedDate),
+        'tanggal_sakit': tanggalSakit,
         'status_perawatan': _statusPerawatan,
         'diagnosa': _diagnosaController.text.trim(),
         'lampiran_url': uploadedPath,
@@ -411,7 +466,8 @@ class _PengajuanSakitScreenState extends State<PengajuanSakitScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Surat dari dokter resmi atau klinik (PDF maks 10MB)',
+                        'Surat dari dokter resmi atau klinik '
+                        '(PDF, JPG, JPEG, PNG maks 10MB)',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade600,
@@ -435,9 +491,12 @@ class _PengajuanSakitScreenState extends State<PengajuanSakitScreen> {
                                   color: const Color(0xFFE53935),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Text(
-                                  'PDF',
-                                  style: TextStyle(
+                               child: Text(
+                                  _uploadedFileName!
+                                      .split('.')
+                                      .last
+                                      .toUpperCase(),
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 11,
